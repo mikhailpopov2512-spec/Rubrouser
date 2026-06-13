@@ -1,0 +1,6 @@
+{
+  "name": "Росбраузер",
+  "description": "Российский импортозамещённый браузер на базе Chromium с поддержкой отечественных сервисов, ГОСТ-криптографии, сертификатов Минцифры и встроенной ситемой фильтрации РКН.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
