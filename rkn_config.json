@@ -1,0 +1,22 @@
+{
+  "blocklist_source": "https://rkn.gov.ru/register/export/xml",
+  "blocklist_fallback_url": "https://eais.rkn.gov.ru/reestr_backup.json",
+  "update_interval_hours": 12,
+  "offline_grace_period_hours": 48,
+  "tls_certificates_required": [
+    "Минцифры России ГУЦ",
+    "Национальный Удостоверяющий Центр"
+  ],
+  "enforced_doh_resolvers": [
+    "https://dns.yandex.ru/dns-query",
+    "https://dns.nashdom.ru/dns-query"
+  ],
+  "embedded_rules_count_critical": 24,
+  "banned_wildcards": [
+    "*.instagram.com",
+    "*.facebook.com",
+    "*.twitter.com",
+    "*.x.com",
+    "*.t.co"
+  ]
+}
