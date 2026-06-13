@@ -29,6 +29,9 @@ class MainActivity : ComponentActivity() {
     enableEdgeToEdge()
     setContent {
       val viewModel: BrowserViewModel = viewModel()
+      LaunchedEffect(viewModel) {
+        com.example.utils.RknBlocklistManager.initialize(applicationContext, viewModel.repository)
+      }
       val themeMode by viewModel.selectedThemeMode.collectAsState()
       val isDarkTheme = when (themeMode) {
         1 -> false
