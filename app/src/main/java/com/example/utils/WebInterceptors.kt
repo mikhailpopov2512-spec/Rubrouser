@@ -20,9 +20,9 @@ object WebInterceptors {
         urlStr: String,
         repository: BrowserRepository,
         onBlockDetected: suspend (BlockedUrl) -> Unit
-    ): Boolean {
+    ): Boolean = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         if (urlStr.startsWith("about:") || urlStr.startsWith("data:") || urlStr.contains("blocked_stub")) {
-            return false
+            return@withContext false
         }
 
         val host = try {
@@ -31,7 +31,7 @@ object WebInterceptors {
             } else {
                 urlStr
             }
-            URL(cleanStr).host.lowercase()
+            URL(cleanStr).host?.lowercase() ?: ""
         } catch (e: Exception) {
             urlStr.lowercase().trim()
         }
@@ -41,9 +41,9 @@ object WebInterceptors {
             val cachedResult = blockCache[host]
             if (cachedResult != null) {
                 onBlockDetected(cachedResult)
-                return true
+                return@withContext true
             }
-            return false
+            return@withContext false
         }
 
         // DB lookup
@@ -52,9 +52,9 @@ object WebInterceptors {
 
         if (matched != null) {
             onBlockDetected(matched)
-            return true
+            return@withContext true
         }
-        return false
+        return@withContext false
     }
 
     /**
@@ -86,7 +86,7 @@ object WebInterceptors {
             } else {
                 urlStr
             }
-            URL(cleanStr).host.lowercase()
+            URL(cleanStr).host?.lowercase() ?: ""
         } catch (e: Exception) {
             return false
         }

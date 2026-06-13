@@ -42,9 +42,17 @@ class BlocklistUpdateService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        // Start Foreground Service within 5s mandatory threshold to avoid crash on Oreo+
-        val notification = createNotification("Обновление баз данных...", "Загрузка актуального реестра ограничений РКН")
-        startForeground(NOTIFICATION_ID, notification)
+        try {
+            // Start Foreground Service within 5s mandatory threshold to avoid crash on Oreo+
+            val notification = createNotification("Обновление баз данных...", "Загрузка актуального реестра ограничений РКН")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "Failed to start foreground service natively, falling back safely", t)
+        }
 
         // Perform the async task in high safety scope
         serviceScope.launch {
@@ -67,10 +75,14 @@ class BlocklistUpdateService : Service() {
                         parseAndSaveBlocklist(jsonStr, repo)
                     }
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 Log.e(TAG, "Update list task failed safely. Leaving existing list intact.", e)
             } finally {
-                stopForeground(true)
+                try {
+                    stopForeground(true)
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Error stopping foreground safely", t)
+                }
                 stopSelf()
             }
         }

@@ -84,15 +84,19 @@ class YandexSyncService : Service() {
                 client.newCall(request).execute().use { response ->
                     if (response.code == 401 && account != null) {
                         Log.w("YandexSyncAdapter", "Token expired (401), invalidating account token...")
-                        accountManager.invalidateAuthToken(account.type, token)
+                        try {
+                            accountManager.invalidateAuthToken(account.type, token)
+                        } catch (t: Throwable) {
+                            Log.e("YandexSyncAdapter", "Failed to invalidate auth token safely", t)
+                        }
                     } else if (!response.isSuccessful) {
                         Log.e("YandexSyncAdapter", "Bookmarks sync failed with response: ${response.code}")
                     } else {
                         Log.d("YandexSyncAdapter", "Bookmarks synchronised")
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("YandexSyncAdapter", "Bookmarks sync exception caught safely", e)
+            } catch (e: Throwable) {
+                Log.e("YandexSyncAdapter", "Bookmarks sync error caught safely", e)
             }
         }
 
@@ -107,15 +111,19 @@ class YandexSyncService : Service() {
                 client.newCall(request).execute().use { response ->
                     if (response.code == 401 && account != null) {
                         Log.w("YandexSyncAdapter", "Token expired (401), invalidating account token...")
-                        accountManager.invalidateAuthToken(account.type, token)
+                        try {
+                            accountManager.invalidateAuthToken(account.type, token)
+                        } catch (t: Throwable) {
+                            Log.e("YandexSyncAdapter", "Failed to invalidate auth token safely", t)
+                        }
                     } else if (!response.isSuccessful) {
                         Log.e("YandexSyncAdapter", "Passwords sync failed with response: ${response.code}")
                     } else {
                         Log.d("YandexSyncAdapter", "Passwords synchronised")
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("YandexSyncAdapter", "Passwords sync exception caught safely", e)
+            } catch (e: Throwable) {
+                Log.e("YandexSyncAdapter", "Passwords sync error caught safely", e)
             }
         }
     }

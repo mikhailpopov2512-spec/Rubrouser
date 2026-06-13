@@ -14,10 +14,8 @@ object GostSslHelper {
             // Load natively compiled GOST library
             System.loadLibrary("gost")
             Log.d(TAG, "Native libgost successfully preloaded")
-        } catch (e: UnsatisfiedLinkError) {
-            Log.w(TAG, "Native libgost.so not found or system loader mismatch. Falling back to default TLS provider safely.", e)
-        } catch (e: Exception) {
-            Log.e(TAG, "Unknown layout mismatch during libgost load", e)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Native libgost.so load failed or system loader mismatch. Falling back to default TLS provider safely.", e)
         }
     }
 
@@ -30,15 +28,21 @@ object GostSslHelper {
             context.init(null, arrayOf<TrustManager>(GostTrustManager()), null)
             Log.i(TAG, "Successfully initialized GOST SSLContext")
             context
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "GOST Cryptography Provider engine is not installed. Reverting to standard TLS.", e)
             try {
                 val context = SSLContext.getInstance("TLS")
                 context.init(null, arrayOf<TrustManager>(GostTrustManager()), null)
                 context
-            } catch (ex: Exception) {
+            } catch (ex: Throwable) {
                 Log.e(TAG, "Fatal failure fallback SSL Context initialization", ex)
-                SSLContext.getDefault()
+                try {
+                    SSLContext.getDefault()
+                } catch (t: Throwable) {
+                    Log.e(TAG, "Could not even retrieve default SSLContext", t)
+                    // If everything else fails, we return a mock context or fallback
+                    throw RuntimeException("Fatal SSL system failure", t)
+                }
             }
         }
     }

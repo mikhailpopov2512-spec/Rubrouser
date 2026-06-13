@@ -190,18 +190,24 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        // Query local history and bookmarks immediately in local scope
-        viewModelScope.launch {
+        // Query local history and bookmarks immediately in background IO dispatcher
+        viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Ensure thread-safe db access
                 val historyList = repository.allHistory.firstOrNull() ?: emptyList()
-                localHistorySuggestions.value = historyList.filter {
-                    it.title.contains(query, ignoreCase = "true".toBoolean()) || it.url.contains(query, ignoreCase = "true".toBoolean())
+                val matchedHistory = historyList.filter {
+                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
                 }.take(3)
 
                 val bookmarkList = repository.allBookmarks.firstOrNull() ?: emptyList()
-                localBookmarkSuggestions.value = bookmarkList.filter {
-                    it.title.contains(query, ignoreCase = "true".toBoolean()) || it.url.contains(query, ignoreCase = "true".toBoolean())
+                val matchedBookmarks = bookmarkList.filter {
+                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
                 }.take(3)
+                
+                withContext(Dispatchers.Main) {
+                    localHistorySuggestions.value = matchedHistory
+                    localBookmarkSuggestions.value = matchedBookmarks
+                }
             } catch (e: Exception) {
                 android.util.Log.e("BrowserViewModel", "Error fetching local suggestions safely", e)
             }
