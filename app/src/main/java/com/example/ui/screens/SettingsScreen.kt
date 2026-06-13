@@ -85,8 +85,10 @@ fun SettingsScreen(
 
                 // SECTION 1: SEARCH & SELECTION
                 SectionHeader(title = "Поиск и отображение", icon = Icons.Default.Search)
+                
+                // Search Engine select card
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -97,7 +99,7 @@ fun SettingsScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable { viewModel.setSearchEngine(index) }
-                                    .padding(vertical = 8.dp),
+                                    .padding(vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 RadioButton(
@@ -107,6 +109,145 @@ fun SettingsScreen(
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(name, fontSize = 14.sp)
                             }
+                        }
+                    }
+                }
+
+                // Theme Mode Select Card
+                val themeMode by viewModel.selectedThemeMode.collectAsState()
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Тема оформления интерфейса:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        listOf(
+                            "Системное оформление (Авто)",
+                            "Светлая тема (По умолчанию)",
+                            "Тёмная тема (Ночная)"
+                        ).forEachIndexed { index, name ->
+                            val optionVal = when(index) {
+                                0 -> 0 // System
+                                1 -> 1 // Light
+                                else -> 2 // Dark
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setThemeMode(optionVal) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = themeMode == optionVal,
+                                    onClick = { viewModel.setThemeMode(optionVal) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(name, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Address Bar Position Card
+                val addressBarPos by viewModel.selectedAddressBarPosition.collectAsState()
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Расположение адресной строки:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Оптимизируйте управление браузером одной рукой или используйте классическую компоновку.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        listOf(
+                            "Снизу страницы (Рекомендуется для одной руки)",
+                            "Сверху страницы (Классическое)"
+                        ).forEachIndexed { index, name ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setAddressBarPosition(index) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = addressBarPos == index,
+                                    onClick = { viewModel.setAddressBarPosition(index) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(name, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+
+                // Custom NTP widgets card setup
+                val showWeather by viewModel.showWeatherWidget.collectAsState()
+                val showTraffic by viewModel.showTrafficWidget.collectAsState()
+                val showRates by viewModel.showRatesWidget.collectAsState()
+                val showDzen by viewModel.showDzenWidget.collectAsState()
+                
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Отечественные инфо-виджеты Табло:", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Показывать виджет Яндекс.Погода", fontSize = 13.sp)
+                            Switch(
+                                checked = showWeather,
+                                onCheckedChange = { viewModel.toggleWidget("weather", it) }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Показывать виджет Яндекс.Пробки", fontSize = 13.sp)
+                            Switch(
+                                checked = showTraffic,
+                                onCheckedChange = { viewModel.toggleWidget("traffic", it) }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Показывать виджет Курсы валют ЦБ РФ", fontSize = 13.sp)
+                            Switch(
+                                checked = showRates,
+                                onCheckedChange = { viewModel.toggleWidget("rates", it) }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Показывать ленту Мультирубрика Дзен", fontSize = 13.sp)
+                            Switch(
+                                checked = showDzen,
+                                onCheckedChange = { viewModel.toggleWidget("dzen", it) }
+                            )
                         }
                     }
                 }

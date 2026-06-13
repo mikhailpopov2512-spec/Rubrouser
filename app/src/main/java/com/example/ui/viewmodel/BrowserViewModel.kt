@@ -56,6 +56,21 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val isSafeBrowsingEnabled = MutableStateFlow(sharedPrefs.getBoolean("safe_browsing", true))
     val isAdBlockEnabled = MutableStateFlow(sharedPrefs.getBoolean("ad_block", true))
 
+    // Theme select: 0 = Системная, 1 = Светлая (по умолчанию), 2 = Тёмная
+    val selectedThemeMode = MutableStateFlow(sharedPrefs.getInt("theme_mode", 1))
+
+    // Address Bar Position: 0 = Снизу (по умолчанию), 1 = Сверху
+    val selectedAddressBarPosition = MutableStateFlow(sharedPrefs.getInt("address_bar_pos", 0))
+
+    // Browser Modes: 0 = Стандартный, 1 = Инкогнито, 2 = Гостевой, 3 = Детский, 4 = Stealth (Скрытный)
+    val currentBrowserMode = MutableStateFlow(0)
+
+    // NTP Widgets Display Toggles
+    val showWeatherWidget = MutableStateFlow(sharedPrefs.getBoolean("w_weather", true))
+    val showTrafficWidget = MutableStateFlow(sharedPrefs.getBoolean("w_traffic", true))
+    val showRatesWidget = MutableStateFlow(sharedPrefs.getBoolean("w_rates", true))
+    val showDzenWidget = MutableStateFlow(sharedPrefs.getBoolean("w_dzen", true))
+
     // RKN database info
     val lastRknUpdate = MutableStateFlow(sharedPrefs.getString("rkn_last_update", "13.06.2026 04:12") ?: "13.06.2026 04:12")
     val isUpdatingRknList = MutableStateFlow(false)
@@ -63,6 +78,31 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     init {
         // Log sync state on start
         updateSyncMessage()
+    }
+
+    // Theme and Bar Position setters
+    fun setThemeMode(mode: Int) {
+        sharedPrefs.edit().putInt("theme_mode", mode).apply()
+        selectedThemeMode.value = mode
+    }
+
+    fun setAddressBarPosition(pos: Int) {
+        sharedPrefs.edit().putInt("address_bar_pos", pos).apply()
+        selectedAddressBarPosition.value = pos
+    }
+
+    fun setBrowserMode(mode: Int) {
+        currentBrowserMode.value = mode
+    }
+
+    fun toggleWidget(widgetType: String, enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("w_$widgetType", enabled).apply()
+        when (widgetType) {
+            "weather" -> showWeatherWidget.value = enabled
+            "traffic" -> showTrafficWidget.value = enabled
+            "rates" -> showRatesWidget.value = enabled
+            "dzen" -> showDzenWidget.value = enabled
+        }
     }
 
     // Consent management

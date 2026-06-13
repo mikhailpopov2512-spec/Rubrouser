@@ -28,8 +28,15 @@ class MainActivity : ComponentActivity() {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
     setContent {
-      MyApplicationTheme {
-        val viewModel: BrowserViewModel = viewModel()
+      val viewModel: BrowserViewModel = viewModel()
+      val themeMode by viewModel.selectedThemeMode.collectAsState()
+      val isDarkTheme = when (themeMode) {
+        1 -> false
+        2 -> true
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
+      }
+
+      MyApplicationTheme(darkTheme = isDarkTheme, dynamicColor = false) {
         val hasAcceptedTerms by viewModel.hasAcceptedTerms.collectAsState()
         var currentScreen by remember { mutableStateOf(AppScreen.BROWSER) }
 

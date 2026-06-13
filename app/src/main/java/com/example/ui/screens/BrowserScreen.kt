@@ -7,14 +7,10 @@ import android.os.Build
 import android.util.Log
 import android.webkit.*
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,26 +20,21 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.data.database.BlockedUrl
 import com.example.ui.components.RussianFlagBackdrop
 import com.example.ui.viewmodel.BrowserViewModel
 import com.example.utils.WebInterceptors
 import kotlinx.coroutines.launch
 import java.io.ByteArrayInputStream
-import java.net.URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,11 +55,29 @@ fun BrowserScreen(
 
     val isAdBlockEnabled by viewModel.isAdBlockEnabled.collectAsState()
     val isSafeBrowsingEnabled by viewModel.isSafeBrowsingEnabled.collectAsState()
+    
+    // Position Preference: 0 = Снизу, 1 = Сверху
+    val addressBarPos by viewModel.selectedAddressBarPosition.collectAsState()
+    val browserMode by viewModel.currentBrowserMode.collectAsState()
 
     var textInput by remember { mutableStateOf("") }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    
+    // Prevent recursive loop crash on search engine redirect matching
+    var lastLoadedUrl by remember { mutableStateOf("") }
+    var isOmniboxFocused by remember { mutableStateOf(false) }
 
-    // Update address field text when webview changes pages
+    // Toggle FLAG_SECURE dynamically on Stealth Mode (mode = 4)
+    val activity = context as? android.app.Activity
+    LaunchedEffect(browserMode) {
+        if (browserMode == 4) {
+            activity?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            activity?.window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    // Sync input field display values
     LaunchedEffect(currentUrl) {
         if (currentUrl != "about:home") {
             textInput = currentUrl
@@ -77,7 +86,15 @@ fun BrowserScreen(
         }
     }
 
-    // Handle back button clicks
+    // High performance routing updates
+    LaunchedEffect(currentUrl) {
+        if (currentUrl != "about:home" && currentUrl != lastLoadedUrl) {
+            lastLoadedUrl = currentUrl
+            webViewRef?.loadUrl(currentUrl)
+        }
+    }
+
+    // Sync system back clicks
     BackHandler(enabled = currentUrl != "about:home") {
         if (webViewRef?.canGoBack() == true) {
             webViewRef?.goBack()
@@ -86,183 +103,240 @@ fun BrowserScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
-                // Address Bar Top
-                Row(
-                    modifier = Modifier
-                        .statusBarsPadding()
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(
-                        onClick = {
-                            viewModel.loadUrl("about:home")
-                            webViewRef?.loadUrl("about:home")
+    // Define the Omnibox Text Field component to share across Top and Bottom compositions
+    val omniboxTextField = @Composable {
+        OutlinedTextField(
+            value = textInput,
+            onValueChange = { textInput = it },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .onFocusChanged { state ->
+                    isOmniboxFocused = state.isFocused
+                }
+                .testTag("omnibox_input"),
+            placeholder = { Text("Поиск или адрес (ya.ru)", fontSize = 13.sp) },
+            leadingIcon = {
+                // Lock vs Protect Shield Indicator
+                IconButton(onClick = {
+                    // Quick warning connections dialog or info
+                }) {
+                    Icon(
+                        imageVector = if (browserMode == 4) {
+                            Icons.Default.Security
+                        } else if (currentUrl.startsWith("https://")) {
+                            Icons.Default.Lock
+                        } else {
+                            Icons.Default.Shield
                         },
-                        modifier = Modifier.testTag("home_button")
-                    ) {
-                        Icon(imageVector = Icons.Default.Home, contentDescription = "Главная")
+                        contentDescription = "Защита СВ",
+                        tint = if (browserMode == 4) {
+                            Color(0xFF00FF66)
+                        } else if (currentUrl.startsWith("https://")) {
+                            Color(0xFF3DDC84) // Safe Green
+                        } else {
+                            Color.Gray
+                        },
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            },
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Voice mic / QR shortcuts in Omnibox
+                    IconButton(onClick = {
+                        textInput = ""
+                        // Trigger voice simulator
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Голосовой поиск",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(18.dp)
+                        )
                     }
-
-                    // Omnibox Bar
-                    OutlinedTextField(
-                        value = textInput,
-                        onValueChange = { textInput = it },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
-                            .testTag("omnibox_input"),
-                        placeholder = { Text("Поиск или адрес (ya.ru)", fontSize = 14.sp) },
-                        leadingIcon = {
+                    if (textInput.isNotEmpty()) {
+                        IconButton(onClick = { textInput = "" }) {
                             Icon(
-                                imageVector = if (currentUrl.startsWith("https://")) Icons.Default.Lock else Icons.Default.Language,
-                                contentDescription = "Соединение",
-                                tint = if (currentUrl.startsWith("https://")) Color(0xFF3DDC84) else Color.Gray,
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Очистить",
                                 modifier = Modifier.size(18.dp)
                             )
-                        },
-                        trailingIcon = {
-                            if (textInput.isNotEmpty()) {
-                                IconButton(onClick = { textInput = "" }) {
-                                    Icon(imageVector = Icons.Default.Clear, contentDescription = "Очистить", modifier = Modifier.size(18.dp))
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(24.dp),
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Search
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                keyboardController?.hide()
-                                viewModel.loadUrl(textInput)
-                            }
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                        )
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Bookmark active indicator toggle
-                    var isCurrentBookmarked by remember { mutableStateOf(false) }
-                    LaunchedEffect(currentUrl) {
-                        isCurrentBookmarked = viewModel.repository.isBookmarked(currentUrl)
-                    }
-
-                    IconButton(
-                        onClick = {
-                            coroutineScope.launch {
-                                if (isCurrentBookmarked) {
-                                    viewModel.removeBookmark(currentUrl)
-                                    isCurrentBookmarked = false
-                                } else {
-                                    viewModel.addBookmark(pageTitle, currentUrl)
-                                    isCurrentBookmarked = true
-                                }
-                            }
-                        },
-                        enabled = currentUrl != "about:home",
-                        modifier = Modifier.testTag("add_bookmark_btn")
-                    ) {
-                        Icon(
-                            imageVector = if (isCurrentBookmarked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "В закладки",
-                            tint = if (isCurrentBookmarked) Color(0xFFD52B1E) else Color.Gray
-                        )
+                        }
                     }
                 }
-
-                // Narrow Tricolor separator line of 2dp height
-                // Ratio: 1/3 White, 1/3 Blue, 1/3 Red
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(2.dp)
-                ) {
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.White))
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0039A6)))
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFFD52B1E)))
+            },
+            singleLine = true,
+            shape = RoundedCornerShape(24.dp),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    keyboardController?.hide()
+                    viewModel.loadUrl(textInput)
                 }
+            ),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = if (browserMode == 4) Color(0xFF00FF66) else MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
+            )
+        )
+    }
 
-                // Loading linear progress bar
-                if (isWebLoading) {
-                    LinearProgressIndicator(
-                        progress = webProgress / 100f,
+    Scaffold(
+        topBar = {
+            // Apply only if Top position (addressBarPos == 1) OR on active focus expansions
+            if (addressBarPos == 1) {
+                Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+                    Row(
                         modifier = Modifier
+                            .statusBarsPadding()
                             .fillMaxWidth()
-                            .height(2.dp),
-                        color = Color(0xFF0039A6),
-                        trackColor = Color.Transparent
-                    )
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(
+                            onClick = {
+                                viewModel.loadUrl("about:home")
+                            },
+                            modifier = Modifier.testTag("home_button")
+                        ) {
+                            Icon(imageVector = Icons.Default.Home, contentDescription = "Главная")
+                        }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            omniboxTextField()
+                        }
+                    }
+
+                    // Omnibox mini tri-color 2dp indicator strip at base of top bar
+                    Row(modifier = Modifier.fillMaxWidth().height(2.dp)) {
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.White))
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0039A6)))
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFFD52B1E)))
+                    }
+
+                    // Progress Loader indicator
+                    if (isWebLoading) {
+                        LinearProgressIndicator(
+                            progress = webProgress / 100f,
+                            modifier = Modifier.fillMaxWidth().height(2.dp),
+                            color = Color(0xFF0039A6),
+                            trackColor = Color.Transparent
+                        )
+                    }
+                }
+            } else {
+                // Even on Bottom Bar, render top separator progress linear line and statusBarsPadding
+                Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
+                    Box(modifier = Modifier.statusBarsPadding())
+                    if (isWebLoading) {
+                        LinearProgressIndicator(
+                            progress = webProgress / 100f,
+                            modifier = Modifier.fillMaxWidth().height(2.dp),
+                            color = Color(0xFF0039A6),
+                            trackColor = Color.Transparent
+                        )
+                    }
                 }
             }
         },
         bottomBar = {
-            BottomAppBar(
-                modifier = Modifier
-                    .height(60.dp)
-                    .windowInsetsPadding(WindowInsets.navigationBars),
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentPadding = PaddingValues(horizontal = 8.dp)
+            // Bottom area dynamically structures Omnibox if pos == 0
+            Surface(
+                tonalElevation = 3.dp,
+                shadowElevation = 8.dp,
+                color = MaterialTheme.colorScheme.surface
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .windowInsetsPadding(WindowInsets.navigationBars)
                 ) {
-                    IconButton(
-                        onClick = { webViewRef?.goBack() },
-                        enabled = webViewRef?.canGoBack() == true,
-                        modifier = Modifier.testTag("back_nav_btn")
-                    ) {
-                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Назад")
-                    }
-
-                    IconButton(
-                        onClick = { webViewRef?.goForward() },
-                        enabled = webViewRef?.canGoForward() == true,
-                        modifier = Modifier.testTag("forward_nav_btn")
-                    ) {
-                        Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Вперед")
-                    }
-
-                    IconButton(
-                        onClick = {
-                            if (isWebLoading) {
-                                webViewRef?.stopLoading()
-                            } else {
-                                webViewRef?.reload()
+                    // Render Address Bar strictly at the bottom if Preference == 0 (Bottom)
+                    if (addressBarPos == 0) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(onClick = { viewModel.loadUrl("about:home") }) {
+                                Icon(imageVector = Icons.Default.Home, contentDescription = "Главная")
                             }
-                        },
-                        modifier = Modifier.testTag("refresh_nav_btn")
-                    ) {
-                        Icon(
-                            imageVector = if (isWebLoading) Icons.Default.Close else Icons.Default.Refresh,
-                            contentDescription = if (isWebLoading) "Остановить" else "Обновить"
-                        )
+
+                            Box(modifier = Modifier.weight(1f)) {
+                                omniboxTextField()
+                            }
+                        }
+
+                        // Omnibox mini tri-color strip indicator for Bottom Bar
+                        Row(modifier = Modifier.fillMaxWidth().height(2.dp)) {
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.White))
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0039A6)))
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFFD52B1E)))
+                        }
                     }
 
-                    IconButton(
-                        onClick = onNavigateToBookmarks,
-                        modifier = Modifier.testTag("bookmarks_nav_btn")
-                    ) {
-                        Icon(imageVector = Icons.Default.Bookmarks, contentDescription = "Библиотека")
-                    }
+                    // Navigation buttons Row (Only visible if the search bar is not active/focused for ergonomics)
+                    if (!isOmniboxFocused) {
+                        BottomAppBar(
+                            modifier = Modifier.height(52.dp),
+                            containerColor = Color.Transparent,
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceAround,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    onClick = { webViewRef?.goBack() },
+                                    enabled = webViewRef?.canGoBack() == true,
+                                    modifier = Modifier.testTag("back_nav_btn")
+                                ) {
+                                    Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Назад")
+                                }
 
-                    IconButton(
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.testTag("settings_nav_btn")
-                    ) {
-                        Icon(imageVector = Icons.Default.Settings, contentDescription = "Настройки")
+                                IconButton(
+                                    onClick = { webViewRef?.goForward() },
+                                    enabled = webViewRef?.canGoForward() == true,
+                                    modifier = Modifier.testTag("forward_nav_btn")
+                                ) {
+                                    Icon(imageVector = Icons.Default.ArrowForward, contentDescription = "Вперед")
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        if (isWebLoading) {
+                                            webViewRef?.stopLoading()
+                                        } else {
+                                            webViewRef?.reload()
+                                        }
+                                    },
+                                    modifier = Modifier.testTag("refresh_nav_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isWebLoading) Icons.Default.Close else Icons.Default.Refresh,
+                                        contentDescription = if (isWebLoading) "Остановить" else "Обновить"
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = onNavigateToBookmarks,
+                                    modifier = Modifier.testTag("bookmarks_nav_btn")
+                                ) {
+                                    Icon(imageVector = Icons.Default.Bookmarks, contentDescription = "Библиотека")
+                                }
+
+                                IconButton(
+                                    onClick = onNavigateToSettings,
+                                    modifier = Modifier.testTag("settings_nav_btn")
+                                ) {
+                                    Icon(imageVector = Icons.Default.Settings, contentDescription = "Настройки")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -274,7 +348,7 @@ fun BrowserScreen(
                 .fillMaxSize()
         ) {
             if (currentUrl == "about:home") {
-                // Render the elegant New Tab Page (NTP)
+                // Render the elegant Custom New Tab Page (NTP)
                 NewTabPageView(
                     viewModel = viewModel,
                     onUrlSelected = { url ->
@@ -295,6 +369,10 @@ fun BrowserScreen(
                                     super.onPageStarted(view, url, favicon)
                                     url?.let {
                                         viewModel.isWebLoading.value = true
+                                        
+                                        // Update text and alignment values to cut looping
+                                        textInput = it
+                                        lastLoadedUrl = it
                                         viewModel.currentUrl.value = it
                                         
                                         // Run block and security inspections
@@ -329,7 +407,6 @@ fun BrowserScreen(
                                     val url = request?.url?.toString() ?: return false
                                     
                                     if (url.startsWith("market://") || url.startsWith("rustore://") || url.startsWith("intent://")) {
-                                        // Intercept and prevent crashing. Act as a deep-link routing
                                         try {
                                             val marketUri = Uri.parse(url)
                                             val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, marketUri)
@@ -351,7 +428,6 @@ fun BrowserScreen(
                                     
                                     if (isAdBlockEnabled && WebInterceptors.isAdRequest(url)) {
                                         Log.d("RosAdBlock", "Blocked ad request: $url")
-                                        // Return empty resource
                                         return WebResourceResponse(
                                             "text/javascript",
                                             "UTF-8",
@@ -377,14 +453,12 @@ fun BrowserScreen(
                                 }
                             }
 
+                            lastLoadedUrl = currentUrl
                             loadUrl(currentUrl)
                             webViewRef = this
                         }
                     },
                     update = { view ->
-                        if (view.url != currentUrl) {
-                            view.loadUrl(currentUrl)
-                        }
                         webViewRef = view
                     },
                     modifier = Modifier.fillMaxSize()
@@ -409,180 +483,3 @@ private fun setupBrowserSettings(webView: WebView) {
         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
     }
 }
-
-@Composable
-fun NewTabPageView(
-    viewModel: BrowserViewModel,
-    onUrlSelected: (String) -> Unit
-) {
-    val searchEngine by viewModel.selectedSearchEngine.collectAsState()
-    var searchInput by remember { mutableStateOf("") }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag("new_tab_page")
-    ) {
-        // Programmatic Russian flag background
-        RussianFlagBackdrop()
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Spacer(modifier = Modifier.height(40.dp))
-
-            // Brand Header
-            Text(
-                text = "РОСБРАУЗЕР",
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Black,
-                letterSpacing = 2.sp,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = "СУВЕРЕННЫЙ ОТЕЧЕСТВЕННЫЙ БРАУЗЕР",
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
-            )
-
-            // Centered Search Engine Bar
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp),
-                shape = RoundedCornerShape(24.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Поиск",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    OutlinedTextField(
-                        value = searchInput,
-                        onValueChange = { searchInput = it },
-                        placeholder = { Text("Поиск в ${if (searchEngine == 0) "Яндекс" else if (searchEngine == 1) "Mail.ru" else "Rambler"}...", fontSize = 14.sp) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .testTag("ntp_search_input"),
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                        keyboardActions = KeyboardActions(
-                            onSearch = {
-                                keyboardController?.hide()
-                                if (searchInput.isNotBlank()) {
-                                    onUrlSelected(searchInput)
-                                }
-                            }
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent,
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent
-                        )
-                    )
-                    if (searchInput.isNotBlank()) {
-                        IconButton(onClick = { searchInput = "" }) {
-                            Icon(imageVector = Icons.Default.Clear, contentDescription = "Сброс")
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(30.dp))
-
-            // Quick Access Grid of Russian Ecological Services
-            val quickTiles = listOf(
-                QuickServiceTile("Яндекс", "https://ya.ru", Icons.Default.Search, Color(0xFFD52B1E)),
-                QuickServiceTile("ВКонтакте", "https://vk.com", Icons.Default.Group, Color(0xFF0077FF)),
-                QuickServiceTile("Госуслуги", "https://www.gosuslugi.ru", Icons.Default.AccountBalance, Color(0xFF0C5BFF)),
-                QuickServiceTile("Rutube", "https://rutube.ru", Icons.Default.Tv, Color(0xFFE50914)),
-                QuickServiceTile("Почта Mail", "https://mail.ru", Icons.Default.Email, Color(0xFF005FFC)),
-                QuickServiceTile("Рамблер", "https://www.rambler.ru", Icons.Default.Explore, Color(0xFF2E6FF2)),
-                QuickServiceTile("RuStore", "https://rustore.ru", Icons.Default.Shop, Color(0xFF33BB55)),
-                QuickServiceTile("ТАСС", "https://tass.ru", Icons.Default.Info, Color(0xFF003D99))
-            )
-
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(4),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                items(quickTiles) { tile ->
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
-                            .clickable { onUrlSelected(tile.url) }
-                            .padding(top = 8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(48.dp)
-                                .background(tile.brandColor.copy(alpha = 0.15f), CircleShape)
-                                .testTag("tile_${tile.name.lowercase()}"),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = tile.icon,
-                                contentDescription = tile.name,
-                                tint = tile.brandColor,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = tile.name,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-
-            // High Safety stamp on NTP
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .background(Color(0xFF3DDC84).copy(alpha = 0.15f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
-            ) {
-                Icon(imageVector = Icons.Default.Shield, contentDescription = "Защита", tint = Color(0xFF3DDC84), modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("ГОСТ TLS криптография и Безопасный поиск активны", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-        }
-    }
-}
-
-data class QuickServiceTile(
-    val name: String,
-    val url: String,
-    val icon: ImageVector,
-    val brandColor: Color
-)
