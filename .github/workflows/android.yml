@@ -1,26 +1,25 @@
 name: Build APK
-on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-
+on: push
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
+      # Удаляем битый helper и создаём правильный wrapper прямо в CI
+      - name: Fix Gradle Wrapper
+        run: |
+          rm -rf gradle
+          gradle wrapper
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Build debug APK
+      - name: Build APK
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK
