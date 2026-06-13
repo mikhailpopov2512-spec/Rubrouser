@@ -22,6 +22,11 @@ jobs:
         java-version: '17'
         cache: 'gradle'
 
+    - name: Download Valid Gradle Wrapper Jar
+      run: |
+        mkdir -p gradle/wrapper
+        curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.5.0/gradle/wrapper/gradle-wrapper.jar
+
     - name: Grant Execute Permission for Gradlew
       run: chmod +x ./gradlew || true
 
