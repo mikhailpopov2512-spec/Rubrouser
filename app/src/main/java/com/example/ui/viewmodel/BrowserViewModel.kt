@@ -168,6 +168,117 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     }
 
     // Navigation and core loading
+    val searchSuggestionQuery = MutableStateFlow("")
+    val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
+    val localHistorySuggestions = MutableStateFlow<List<com.example.data.database.HistoryItem>>(emptyList())
+    val localBookmarkSuggestions = MutableStateFlow<List<com.example.data.database.Bookmark>>(emptyList())
+
+    private var searchSuggestJob: kotlinx.coroutines.Job? = null
+    private val httpClient = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    fun onSearchInputChanged(query: String) {
+        searchSuggestionQuery.value = query
+        searchSuggestJob?.cancel()
+        
+        if (query.isBlank()) {
+            searchSuggestions.value = emptyList()
+            localHistorySuggestions.value = emptyList()
+            localBookmarkSuggestions.value = emptyList()
+            return
+        }
+
+        // Query local history and bookmarks immediately in local scope
+        viewModelScope.launch {
+            try {
+                val historyList = repository.allHistory.firstOrNull() ?: emptyList()
+                localHistorySuggestions.value = historyList.filter {
+                    it.title.contains(query, ignoreCase = "true".toBoolean()) || it.url.contains(query, ignoreCase = "true".toBoolean())
+                }.take(3)
+
+                val bookmarkList = repository.allBookmarks.firstOrNull() ?: emptyList()
+                localBookmarkSuggestions.value = bookmarkList.filter {
+                    it.title.contains(query, ignoreCase = "true".toBoolean()) || it.url.contains(query, ignoreCase = "true".toBoolean())
+                }.take(3)
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserViewModel", "Error fetching local suggestions safely", e)
+            }
+        }
+
+        // Fetch Yandex remote search suggestions with a debounce of 200ms
+        searchSuggestJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(200)
+            fetchSuggestions(query)
+        }
+    }
+
+    private suspend fun fetchSuggestions(query: String) {
+        withContext(Dispatchers.IO) {
+            var attempt = 0
+            val maxRetries = 3
+            var delayMs = 100L
+            var success = false
+            
+            while (attempt < maxRetries && !success) {
+                try {
+                    val encoded = java.net.URLEncoder.encode(query, "UTF-8")
+                    val url = "https://suggest.yandex.ru/suggest-ya.cgi?v=4&part=$encoded"
+                    val request = okhttp3.Request.Builder()
+                        .url(url)
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                        .build()
+
+                    httpClient.newCall(request).execute().use { response ->
+                        if (response.isSuccessful) {
+                            val body = response.body?.string() ?: ""
+                            if (body.isNotBlank()) {
+                                val jsonArray = org.json.JSONArray(body)
+                                if (jsonArray.length() > 1) {
+                                    val suggestionsArray = jsonArray.getJSONArray(1)
+                                    val results = mutableListOf<String>()
+                                    for (i in 0 until suggestionsArray.length()) {
+                                        val s = suggestionsArray.optString(i)
+                                        if (s.isNotBlank()) {
+                                            results.add(s)
+                                        }
+                                    }
+                                    withContext(Dispatchers.Main) {
+                                        searchSuggestions.value = results.take(8)
+                                    }
+                                    success = true
+                                }
+                            }
+                        } else {
+                            android.util.Log.e("BrowserViewModel", "HTTP response is not successful: ${response.code}")
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("BrowserViewModel", "Error fetching search suggestions (attempt ${attempt + 1})", e)
+                    attempt++
+                    if (attempt < maxRetries) {
+                        kotlinx.coroutines.delay(delayMs)
+                        delayMs *= 2 // exponential backoff
+                    }
+                }
+            }
+        }
+    }
+
+    fun getLayoutCorrection(input: String): String {
+        val enToRu = mapOf(
+            'q' to 'й', 'w' to 'ц', 'e' to 'у', 'r' to 'к', 't' to 'е', 'y' to 'н', 'u' to 'г', 'i' to 'ш', 'o' to 'щ', 'p' to 'з', '[' to 'х', ']' to 'ъ',
+            'a' to 'ф', 's' to 'ы', 'd' to 'в', 'f' to 'а', 'g' to 'п', 'h' to 'р', 'j' to 'о', 'k' to 'л', 'l' to 'д', ';' to 'ж', '\'' to 'э',
+            'z' to 'я', 'x' to 'ч', 'c' to 'с', 'v' to 'м', 'b' to 'и', 'n' to 'т', 'm' to 'ь', ',' to 'б', '.' to 'ю', '/' to '.'
+        )
+        val ruToEn = enToRu.entries.associate { (k, v) -> v to k }
+        if (input.isBlank()) return input
+        val ruConverted = input.map { enToRu[it.lowercaseChar()] ?: it }.joinToString("")
+        val enConverted = input.map { ruToEn[it.lowercaseChar()] ?: it }.joinToString("")
+        return if (ruConverted != input) ruConverted else enConverted
+    }
+
     fun loadUrl(url: String) {
         var cleanUrl = url.trim()
         if (cleanUrl.isBlank()) return

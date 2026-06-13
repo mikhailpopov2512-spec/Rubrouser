@@ -86,17 +86,46 @@ fun BrowserScreen(
         }
     }
 
-    // High performance routing updates
+    // Normalize URL helper to safely compare and avoid Chromium crash loops
+    fun normalizeUrl(url: String?): String {
+        if (url == null) return ""
+        var clean = url.trim().lowercase()
+        if (clean.endsWith("/")) {
+            clean = clean.dropLast(1)
+        }
+        clean = clean.replace("https://", "").replace("http://", "")
+        if (clean.startsWith("www.")) {
+            clean = clean.substring(4)
+        }
+        return clean
+    }
+
+    // High performance routing updates with loops prevention
     LaunchedEffect(currentUrl) {
-        if (currentUrl != "about:home" && currentUrl != lastLoadedUrl) {
-            lastLoadedUrl = currentUrl
-            webViewRef?.loadUrl(currentUrl)
+        if (currentUrl != "about:home") {
+            val webView = webViewRef
+            if (webView != null) {
+                val cleanCurrent = normalizeUrl(currentUrl)
+                val cleanWebUrl = normalizeUrl(webView.url)
+                val cleanWebOrigUrl = normalizeUrl(webView.originalUrl)
+                
+                if (cleanCurrent != cleanWebUrl && cleanCurrent != cleanWebOrigUrl && currentUrl != lastLoadedUrl) {
+                    lastLoadedUrl = currentUrl
+                    webView.loadUrl(currentUrl)
+                }
+            } else {
+                lastLoadedUrl = currentUrl
+            }
         }
     }
 
+    val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+
     // Sync system back clicks
-    BackHandler(enabled = currentUrl != "about:home") {
-        if (webViewRef?.canGoBack() == true) {
+    BackHandler(enabled = currentUrl != "about:home" || isOmniboxFocused) {
+        if (isOmniboxFocused) {
+            focusManager.clearFocus()
+        } else if (webViewRef?.canGoBack() == true) {
             webViewRef?.goBack()
         } else {
             viewModel.loadUrl("about:home")
@@ -107,7 +136,10 @@ fun BrowserScreen(
     val omniboxTextField = @Composable {
         OutlinedTextField(
             value = textInput,
-            onValueChange = { textInput = it },
+            onValueChange = { 
+                textInput = it 
+                viewModel.onSearchInputChanged(it)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)
@@ -464,6 +496,146 @@ fun BrowserScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
+
+            if (isOmniboxFocused) {
+                val overlayColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF121212) else Color.White
+                val queryVal = textInput
+                val remoteSuggestions by viewModel.searchSuggestions.collectAsState()
+                val historySuggestions by viewModel.localHistorySuggestions.collectAsState()
+                val bookmarkSuggestions by viewModel.localBookmarkSuggestions.collectAsState()
+                val layoutCorrection = remember(queryVal) { viewModel.getLayoutCorrection(queryVal) }
+
+                androidx.compose.foundation.lazy.LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(overlayColor)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .testTag("search_suggestions_overlay")
+                ) {
+                    if (layoutCorrection != queryVal && layoutCorrection.isNotBlank() && queryVal.isNotBlank()) {
+                        item {
+                            ListItem(
+                                headlineContent = {
+                                    Text(
+                                        text = "Возможно, вы имели в виду:",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        text = layoutCorrection,
+                                        fontSize = 15.sp,
+                                        color = MaterialTheme.colorScheme.secondary,
+                                        fontWeight = FontWeight.Black
+                                    )
+                                },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardAlt,
+                                        contentDescription = "Раскладка",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                modifier = Modifier.clickable {
+                                    textInput = layoutCorrection
+                                    viewModel.onSearchInputChanged(layoutCorrection)
+                                }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                        }
+                    }
+
+                    // Matching Bookmark items
+                    if (bookmarkSuggestions.isNotEmpty()) {
+                        item {
+                            Text(
+                                "ЗАКЛАДКИ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 12.dp)
+                            )
+                        }
+                        items(bookmarkSuggestions.size) { index ->
+                            val bookmark = bookmarkSuggestions[index]
+                            ListItem(
+                                headlineContent = { Text(bookmark.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                                supportingContent = { Text(bookmark.url, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Gray, fontSize = 12.sp) },
+                                leadingContent = { Icon(Icons.Default.Bookmark, contentDescription = "Закладка", tint = Color(0xFF0C5BFF)) },
+                                modifier = Modifier.clickable {
+                                    focusManager.clearFocus()
+                                    viewModel.loadUrl(bookmark.url)
+                                }
+                            )
+                        }
+                        item { HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp)) }
+                    }
+
+                    // Matching History items
+                    if (historySuggestions.isNotEmpty()) {
+                        item {
+                            Text(
+                                "ИСТОРИЯ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 12.dp)
+                            )
+                        }
+                        items(historySuggestions.size) { index ->
+                            val history = historySuggestions[index]
+                            ListItem(
+                                headlineContent = { Text(history.title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis) },
+                                supportingContent = { Text(history.url, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, color = Color.Gray, fontSize = 12.sp) },
+                                leadingContent = { Icon(Icons.Default.History, contentDescription = "История", tint = Color.Gray) },
+                                modifier = Modifier.clickable {
+                                    focusManager.clearFocus()
+                                    viewModel.loadUrl(history.url)
+                                }
+                            )
+                        }
+                        item { HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp)) }
+                    }
+
+                    // Remote Search suggestions from Yandex cgi suggest API
+                    if (remoteSuggestions.isNotEmpty() && queryVal.isNotBlank()) {
+                        item {
+                            Text(
+                                "ПОИСКОВЫЕ ПОДСКАЗКИ YANDEX",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(vertical = 6.dp, horizontal = 12.dp)
+                            )
+                        }
+                        items(remoteSuggestions.size) { index ->
+                            val suggestion = remoteSuggestions[index]
+                            ListItem(
+                                headlineContent = { Text(suggestion, fontWeight = FontWeight.SemiBold) },
+                                leadingContent = { Icon(Icons.Default.Search, contentDescription = "Поиск", tint = Color.Gray) },
+                                modifier = Modifier.clickable {
+                                    focusManager.clearFocus()
+                                    viewModel.loadUrl(suggestion)
+                                }
+                            )
+                        }
+                    } else if (queryVal.isNotBlank()) {
+                        // Under local fallback / offline or loading search state
+                        item {
+                            ListItem(
+                                headlineContent = { Text("Искать в Яндексе: \"$queryVal\"") },
+                                leadingContent = { Icon(Icons.Default.Search, contentDescription = "Поиск", tint = MaterialTheme.colorScheme.primary) },
+                                modifier = Modifier.clickable {
+                                    focusManager.clearFocus()
+                                    viewModel.loadUrl(queryVal)
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -480,6 +652,8 @@ private fun setupBrowserSettings(webView: WebView) {
         displayZoomControls = false
         allowContentAccess = true
         allowFileAccess = true
+        allowFileAccessFromFileURLs = true
+        allowUniversalAccessFromFileURLs = true
         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
     }
 }

@@ -84,46 +84,15 @@
 3. Исполняемый APK-файл будет сохранен по пути:
    `app/build/outputs/apk/debug/app-debug.apk`
 
-### Способ 2: Контейнеризированная сборка (Docker)
+### Способ 2: Компиляция нативного движка Chromium (Docker)
 
-Для полной изоляции окружения компиляции используйте поставляемый ниже Docker-скрипт.
+Для сборки полноценного нативного форка Chromium со встроенными изменениями, триколором и защищенным сетевым стеком используйте корневой `Dockerfile`.
 
-1. Создайте в корне проекта файл `Dockerfile`:
-   ```dockerfile
-   FROM eclipse-temurin:17-jdk-jammy
+Подробные инструкции, описание патчей и шаги по подписи собранных APK опубликованы в специальном руководстве:
+👉 **[Смотреть руководство по сборке Chromium - README_CHROMIUM.md](./README_CHROMIUM.md)**
 
-   # Установка зависимостей сборки Android
-   RUN apt-get update && apt-get install -y wget unzip git && rm -rf /var/lib/apt/lists/*
-
-   # Установка Android SDK
-   ENV ANDROID_SDK_ROOT=/opt/android-sdk
-   RUN mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
-   RUN wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -O /tmp/cmdline.zip \
-       && unzip -q /tmp/cmdline.zip -d $ANDROID_SDK_ROOT/cmdline-tools \
-       && mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest \
-       && rm /tmp/cmdline.zip
-
-   ENV PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
-
-   # Согласие с лицензиями SDK
-   RUN yes | sdkmanager --licenses
-
-   # Установка платформы компиляции и утилит сборщика
-   RUN sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
-
-   WORKDIR /app
-   COPY . .
-
-   # Сборка финального APK
-   CMD ["./gradlew", ":app:assembleDebug", "--no-daemon"]
-   ```
-
-2. Соберите образ и запустите компиляцию:
-   ```bash
-   docker build -t rosbrowser-builder .
-   docker run --rm -v $(pwd)/outputs:/app/app/build/outputs/apk rosbrowser-builder
-   ```
-   Скомпилированный APK появится в локальной папке `outputs/`.
+Для сборки только облегченного прикладного контейнера Jetpack Compose используйте:
+`docker build -f Dockerfile.android -t rosbrowser-compose .`
 
 ---
 
