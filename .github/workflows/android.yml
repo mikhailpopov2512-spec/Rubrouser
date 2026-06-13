@@ -1,5 +1,8 @@
 name: Build APK
-on: push
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
 
 jobs:
   build:
@@ -17,7 +20,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Build APK (using system Gradle)
+      - name: Create missing debug keystore
+        run: |
+          mkdir -p /home/runner/mork/Rubrowser/Rubrowser
+          keytool -genkey -v -keystore /home/runner/mork/Rubrowser/Rubrowser/debug_keystore \
+            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug, O=Android, C=US"
+
+      - name: Build APK
         run: gradle assembleDebug --no-daemon
 
       - name: Upload APK
