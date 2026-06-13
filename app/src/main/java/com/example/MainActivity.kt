@@ -31,6 +31,13 @@ class MainActivity : ComponentActivity() {
       val viewModel: BrowserViewModel = viewModel()
       LaunchedEffect(viewModel) {
         com.example.utils.RknBlocklistManager.initialize(applicationContext, viewModel.repository)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+          try {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
+          } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Failed to request permission", e)
+          }
+        }
       }
       val themeMode by viewModel.selectedThemeMode.collectAsState()
       val isDarkTheme = when (themeMode) {

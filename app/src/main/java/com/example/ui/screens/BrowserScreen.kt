@@ -394,6 +394,25 @@ fun BrowserScreen(
                         WebView(ctx).apply {
                             setupBrowserSettings(this)
                             
+                            // Native file downloads completed simulation and notification triggers
+                            setDownloadListener { url, _, contentDisposition, mimetype, _ ->
+                                val fileName = try {
+                                    android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype)
+                                } catch (e: Exception) {
+                                    "документ"
+                                }
+                                try {
+                                    com.example.utils.BrowserNotificationHelper.showNotification(
+                                        context,
+                                        id = 1002,
+                                        title = "Загрузка файла завершена",
+                                        message = "Файл $fileName успешно загружен."
+                                    )
+                                } catch (t: Throwable) {
+                                    Log.e("WebView", "Error during download notify", t)
+                                }
+                            }
+                            
                             webViewClient = object : WebViewClient() {
                                 
                                 // Monitor URL starts to check RKN blocks and Safe browsing
@@ -412,6 +431,18 @@ fun BrowserScreen(
                                             val isBlocked = WebInterceptors.checkRknBlock(it, viewModel.repository) { matchedBlock ->
                                                 // Log blocked attempt to DB for live statistics!
                                                 viewModel.repository.logBlockedAttempt(it, matchedBlock.reason)
+                                                
+                                                // Trigger RKN Block notification
+                                                try {
+                                                    com.example.utils.BrowserNotificationHelper.showNotification(
+                                                        context,
+                                                        id = 1001,
+                                                        title = "Ресурс заблокирован (ФЗ-149)",
+                                                        message = "Доступ к сайту $it заблокирован Роскомнадзором."
+                                                    )
+                                                } catch (tn: Throwable) {
+                                                    Log.e("WebView", "Block notification failed", tn)
+                                                }
                                                 
                                                 // Force load a custom offline RKN HTML warn page
                                                 val html = WebInterceptors.generateBlockedPageHtml(it, matchedBlock.reason, matchedBlock.law)
@@ -498,7 +529,7 @@ fun BrowserScreen(
             }
 
             if (isOmniboxFocused) {
-                val overlayColor = if (androidx.compose.foundation.isSystemInDarkTheme()) Color(0xFF121212) else Color.White
+                val overlayColor = if (com.example.ui.theme.ThemeManager.LocalDarkTheme.current) Color(0xFF121212) else Color.White
                 val queryVal = textInput
                 val remoteSuggestions by viewModel.searchSuggestions.collectAsState()
                 val historySuggestions by viewModel.localHistorySuggestions.collectAsState()

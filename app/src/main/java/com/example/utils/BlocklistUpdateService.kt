@@ -101,6 +101,16 @@ class BlocklistUpdateService : Service() {
                 repository.addBlockedUrl(pattern, reason)
             }
             Log.d(TAG, "Successfully parsed and saved ${jsonArray.length()} block entries.")
+            try {
+                BrowserNotificationHelper.showNotification(
+                    applicationContext,
+                    id = 1003,
+                    title = "Реестр РКН обновлен",
+                    message = "База ограничений успешно синхронизирована с сервером регулятора."
+                )
+            } catch (t: Throwable) {
+                Log.e(TAG, "Notification failed", t)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "JSON parsing error failed gracefully", e)
         }

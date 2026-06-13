@@ -45,7 +45,7 @@ fun NewTabPageView(
     // Observe state from ViewModel
     val searchEngine by viewModel.selectedSearchEngine.collectAsState()
     val browserMode by viewModel.currentBrowserMode.collectAsState() // 0=Std, 1=Incognito, 2=Guest, 3=Child, 4=Stealth
-    val isDark = isSystemInDarkTheme()
+    val isDark = com.example.ui.theme.ThemeManager.LocalDarkTheme.current
 
     // Banners alerts dimiss state
     var showRknBanner by remember { mutableStateOf(true) }

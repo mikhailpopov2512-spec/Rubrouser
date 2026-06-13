@@ -147,6 +147,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             sharedPrefs.edit().putString("rkn_last_update", nowStr).apply()
             lastRknUpdate.value = nowStr
             isUpdatingRknList.value = false
+            try {
+                com.example.utils.BrowserNotificationHelper.showNotification(
+                    getApplication(),
+                    id = 1004,
+                    title = "Реестр РКН обновлен",
+                    message = "База ограничений успешно синхронизирована вручную: $nowStr"
+                )
+            } catch (t: Throwable) {
+                // Safe ignore
+            }
         }
     }
 

@@ -67,6 +67,16 @@ class YandexSyncService : Service() {
                 syncPasswords(token, accountManager, account)
 
                 Log.d("YandexSyncAdapter", "Background sync completed successfully")
+                try {
+                    BrowserNotificationHelper.showNotification(
+                        context,
+                        id = 1005,
+                        title = "Синхронизация завершена",
+                        message = "Закладки и пароли успешно синхронизированы с надежным облаком."
+                    )
+                } catch (t: Throwable) {
+                    Log.e("YandexSyncAdapter", "Failed to trigger finish notification", t)
+                }
             } catch (e: Exception) {
                 Log.e("YandexSyncAdapter", "Error during sync performer", e)
                 // Ignored to prevent crashes and maintain stability

@@ -9,8 +9,10 @@ import java.net.URL
 
 object WebInterceptors {
 
+    private class CacheEntry(val matched: BlockedUrl?)
+
     // Simple cache for checked URLs to boost performance
-    private val blockCache = java.util.concurrent.ConcurrentHashMap<String, BlockedUrl?>()
+    private val blockCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry>()
 
     /**
      * Checks if a domain/url is blocked.
@@ -37,8 +39,9 @@ object WebInterceptors {
         }
 
         // Cache lookup
-        if (blockCache.containsKey(host)) {
-            val cachedResult = blockCache[host]
+        val cached = blockCache[host]
+        if (cached != null) {
+            val cachedResult = cached.matched
             if (cachedResult != null) {
                 onBlockDetected(cachedResult)
                 return@withContext true
@@ -48,7 +51,7 @@ object WebInterceptors {
 
         // DB lookup
         val matched = repository.checkBlockedUrl(urlStr)
-        blockCache[host] = matched
+        blockCache[host] = CacheEntry(matched)
 
         if (matched != null) {
             onBlockDetected(matched)
