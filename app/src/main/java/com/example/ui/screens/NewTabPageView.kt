@@ -282,9 +282,9 @@ fun NewTabPageView(
                     shape = RoundedCornerShape(24.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (browserMode == 4) Color(0xFF161616) else MaterialTheme.colorScheme.surface
+                        containerColor = if (browserMode == 4) Color(0xFF161616) else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
                     ),
-                    border = if (browserMode == 4) BorderStroke(1.dp, Color(0xFF00FF66).copy(0.4f)) else null
+                    border = if (browserMode == 4) BorderStroke(1.dp, Color(0xFF00FF66).copy(0.4f)) else BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -467,7 +467,8 @@ fun NewTabPageView(
                             if (showWeather) {
                                 Card(
                                     modifier = Modifier.weight(1f),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
@@ -492,7 +493,8 @@ fun NewTabPageView(
                             if (showTraffic) {
                                 Card(
                                     modifier = Modifier.weight(1f),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
@@ -528,7 +530,8 @@ fun NewTabPageView(
                         if (showRates) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
@@ -586,7 +589,8 @@ fun NewTabPageView(
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
                                     .clickable { onUrlSelected("https://yandex.ru/internet_news_mock") },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
                                 Column(modifier = Modifier.padding(14.dp)) {

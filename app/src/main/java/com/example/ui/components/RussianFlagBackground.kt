@@ -8,18 +8,20 @@ import android.graphics.ColorMatrixColorFilter
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.EaseOut
+import com.example.ui.theme.ThemeManager
 import androidx.compose.foundation.Canvas as ComposeCanvas
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.unit.dp
 
 class RussianFlagBackground {
     /**
@@ -131,7 +133,7 @@ fun RussianFlagBackdrop(
     isWatermark: Boolean = false,
     alphaVal: Float = if (isWatermark) 0.10f else 1.0f
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = ThemeManager.LocalDarkTheme.current
     val flagPainter = remember { RussianFlagBackground() }
     
     // Animate alpha for cold-start fade-in transition (300ms) unless it's a static watermark
@@ -147,8 +149,14 @@ fun RussianFlagBackdrop(
         }
     }
 
+    val blurModifier = if (!isWatermark && android.os.Build.VERSION.SDK_INT >= 31) {
+        modifier.blur(radius = 20.dp)
+    } else {
+        modifier
+    }
+
     Box(
-        modifier = modifier
+        modifier = blurModifier
             .fillMaxSize()
             .graphicsLayer {
                 // Hardware accelerated fade-in

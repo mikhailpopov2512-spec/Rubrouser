@@ -1,38 +1,51 @@
-name: Build APK
+name: Android CI/CD Pipeline
+
 on:
   push:
     branches: [ "main", "master" ]
   pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
   build:
+    name: Build & Test Rosbrowser
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+    - name: Checkout Codebase
+      uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
+    - name: Setup Java JDK 17
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v3
+    - name: Download Valid Gradle Wrapper Jar
+      run: |
+        mkdir -p gradle/wrapper
+        curl -L -s -o gradle/wrapper/gradle-wrapper.jar https://raw.githubusercontent.com/gradle/gradle/v8.5/gradle/wrapper/gradle-wrapper.jar
 
-      - name: Create missing debug keystore
-        run: |
-          mkdir -p /home/runner/mork/Rubrowser/Rubrowser
-          keytool -genkey -v -keystore /home/runner/mork/Rubrowser/Rubrowser/debug_keystore \
-            -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass android -keypass android \
-            -dname "CN=Android Debug, O=Android, C=US"
+    - name: Decode Debug Keystore
+      run: |
+        if [ -f debug.keystore.base64 ]; then
+          base64 -d debug.keystore.base64 > debug.keystore
+          echo "debug.keystore decoded successfully."
+        else
+          echo "debug.keystore.base64 not found!"
+        fi
 
-      - name: Build APK
-        run: gradle assembleDebug --no-daemon
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
+    - name: Grant Execute Permission for Gradlew
+      run: chmod +x ./gradlew || true
+
+    - name: Run Room KSP Code Generation and Compile Check
+      run: ./gradlew compileDebugKotlin --no-daemon
+
+    - name: Execute Local JVM Unit and Robolectric Tests
+      run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+    - name: Assemble Debug APK Binaries
+      run: ./gradlew :app:assembleDebug --no-daemon
