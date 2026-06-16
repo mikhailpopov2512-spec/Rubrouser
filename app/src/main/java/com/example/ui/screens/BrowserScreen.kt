@@ -402,9 +402,7 @@ fun BrowserScreen(
                                     "документ"
                                 }
                                 try {
-                                    com.example.utils.BrowserNotificationHelper.showNotification(
-                                        context,
-                                        id = 1002,
+                                    viewModel.showLiveNotification(
                                         title = "Загрузка файла завершена",
                                         message = "Файл $fileName успешно загружен."
                                     )
@@ -434,9 +432,7 @@ fun BrowserScreen(
                                                 
                                                 // Trigger RKN Block notification
                                                 try {
-                                                    com.example.utils.BrowserNotificationHelper.showNotification(
-                                                        context,
-                                                        id = 1001,
+                                                    viewModel.showLiveNotification(
                                                         title = "Ресурс заблокирован (ФЗ-149)",
                                                         message = "Доступ к сайту $it заблокирован Роскомнадзором."
                                                     )
@@ -558,6 +554,48 @@ fun BrowserScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                         .testTag("search_suggestions_overlay")
                 ) {
+                    if (queryVal.isBlank()) {
+                        item {
+                            Text(
+                                "ПОПУЛЯРНЫЕ ОТЕЧЕСТВЕННЫЕ РЕСУРСЫ",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(vertical = 12.dp, horizontal = 12.dp),
+                                letterSpacing = 0.5.sp
+                            )
+                        }
+                        val popularSites = listOf(
+                            Triple("Портал Госуслуг РФ", "gosuslugi.ru", Icons.Default.AccountBalance),
+                            Triple("Яндекс Поиск и Сервисы", "ya.ru", Icons.Default.Explore),
+                            Triple("ВКонтакте — Общение", "vk.com", Icons.Default.Forum),
+                            Triple("Сбербанк Онлайн", "sberbank.ru", Icons.Default.Payments),
+                            Triple("Дзен Новости и Медиа", "dzen.ru", Icons.Default.Newspaper),
+                            Triple("Электронная Почта Mail.ru", "mail.ru", Icons.Default.Email)
+                        )
+                        items(popularSites.size) { index ->
+                            val (name, domain, icon) = popularSites[index]
+                            ListItem(
+                                headlineContent = { Text(name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp) },
+                                supportingContent = { Text(domain, fontSize = 11.sp, color = Color.Gray) },
+                                leadingContent = { 
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f), RoundedCornerShape(18.dp)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(icon, contentDescription = name, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                                    }
+                                },
+                                modifier = Modifier.clickable {
+                                    focusManager.clearFocus()
+                                    viewModel.loadUrl("https://$domain")
+                                }
+                            )
+                        }
+                    }
+
                     if (layoutCorrection != queryVal && layoutCorrection.isNotBlank() && queryVal.isNotBlank()) {
                         item {
                             ListItem(
@@ -678,6 +716,84 @@ fun BrowserScreen(
                                     viewModel.loadUrl(queryVal)
                                 }
                             )
+                        }
+                    }
+                }
+            }
+            
+            // GORGEOUS PREMIUM SLIDE-DOWN NOTIFICATION OVERLAY
+            val liveNotify by viewModel.liveNotification.collectAsState()
+            LaunchedEffect(liveNotify) {
+                if (liveNotify != null) {
+                    kotlinx.coroutines.delay(4500) // auto-dismiss
+                    viewModel.liveNotification.value = null
+                }
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = liveNotify != null,
+                enter = androidx.compose.animation.fadeIn() + androidx.compose.animation.slideInVertically(initialOffsetY = { -it }),
+                exit = androidx.compose.animation.fadeOut() + androidx.compose.animation.slideOutVertically(targetOffsetY = { -it }),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp)
+                    .statusBarsPadding()
+            ) {
+                liveNotify?.let { (title, msg) ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .widthIn(max = 500.dp)
+                            .clickable { viewModel.liveNotification.value = null },
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (com.example.ui.theme.ThemeManager.LocalDarkTheme.current) Color(0xFF1E293B) else Color.White
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f))
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), RoundedCornerShape(20.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Notifications,
+                                    contentDescription = "Уведомление",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = title,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = if (com.example.ui.theme.ThemeManager.LocalDarkTheme.current) Color.White else Color(0xFF0F172A)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = msg,
+                                    fontSize = 12.sp,
+                                    color = if (com.example.ui.theme.ThemeManager.LocalDarkTheme.current) Color(0xFF94A3B8) else Color(0xFF475569),
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            IconButton(onClick = { viewModel.liveNotification.value = null }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Закрыть",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }

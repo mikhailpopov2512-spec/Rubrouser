@@ -52,6 +52,23 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val isSyncing = MutableStateFlow(false)
     val syncStatusMessage = MutableStateFlow("Синхронизация отключена")
 
+    // Dynamic Live notification state for 100% visual arrival guarantees
+    val liveNotification = MutableStateFlow<Pair<String, String>?>(null)
+
+    fun showLiveNotification(title: String, message: String) {
+        liveNotification.value = Pair(title, message)
+        try {
+            com.example.utils.BrowserNotificationHelper.showNotification(
+                getApplication(),
+                id = (System.currentTimeMillis() % 10000 + 5000).toInt(),
+                title = title,
+                message = message
+            )
+        } catch (t: Throwable) {
+            // Safe fallback
+        }
+    }
+
     // Security & AdBlock values
     val isSafeBrowsingEnabled = MutableStateFlow(sharedPrefs.getBoolean("safe_browsing", true))
     val isAdBlockEnabled = MutableStateFlow(sharedPrefs.getBoolean("ad_block", true))
@@ -147,16 +164,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             sharedPrefs.edit().putString("rkn_last_update", nowStr).apply()
             lastRknUpdate.value = nowStr
             isUpdatingRknList.value = false
-            try {
-                com.example.utils.BrowserNotificationHelper.showNotification(
-                    getApplication(),
-                    id = 1004,
-                    title = "Реестр РКН обновлен",
-                    message = "База ограничений успешно синхронизирована вручную: $nowStr"
-                )
-            } catch (t: Throwable) {
-                // Safe ignore
-            }
+            showLiveNotification(
+                title = "Реестр РКН обновлен",
+                message = "База ограничений успешно синхронизирована вручную: $nowStr"
+            )
         }
     }
 

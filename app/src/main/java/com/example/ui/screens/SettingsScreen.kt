@@ -807,6 +807,98 @@ fun SettingsScreen(
                     }
                 }
 
+                // SECTION 6: NOTIFICATIONS & ALERTS
+                SectionHeader(title = "Уведомления и оповещения", icon = Icons.Default.Notifications)
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Каналы доставки уведомлений",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Настройте мгновенный приход оповещений о завершении загрузок, обновлении фильтров блокировок РКН и системном статусе.",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        var ntfDownloads by remember { mutableStateOf(true) }
+                        var ntfRkn by remember { mutableStateOf(true) }
+                        var ntfInApp by remember { mutableStateOf(true) }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Звуковые пуш-уведомления", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("Системные звуковые сигналы доставки", fontSize = 11.sp, color = Color.Gray)
+                            }
+                            Switch(
+                                checked = ntfDownloads,
+                                onCheckedChange = { ntfDownloads = it }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Предупреждения Росбраузера", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("Мгновенный показ статуса реестра РКН", fontSize = 11.sp, color = Color.Gray)
+                            }
+                            Switch(
+                                checked = ntfRkn,
+                                onCheckedChange = { ntfRkn = it }
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Всплывающие инфо-баннеры", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                                Text("Интерактивный показ уведомлений в приложении", fontSize = 11.sp, color = Color.Gray)
+                            }
+                            Switch(
+                                checked = ntfInApp,
+                                onCheckedChange = { ntfInApp = it }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Button(
+                            onClick = {
+                                viewModel.showLiveNotification(
+                                    title = "Тест службы уведомлений РФ",
+                                    message = "Канал доставки уведомлений активен! Уведомления поступают без задержек."
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth().testTag("test_push_notif_btn"),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Icon(imageVector = Icons.Default.Send, contentDescription = "Отправить", modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Проверить приход пуш-уведомления", fontSize = 13.sp)
+                        }
+                    }
+                }
+
                 // Legal stamp
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
