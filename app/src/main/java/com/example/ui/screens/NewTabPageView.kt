@@ -19,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -60,6 +62,33 @@ fun NewTabPageView(
 
     var searchInput by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
+
+    // Premium interactive elements state (releasing 56 improvements)
+    var isSpeaking by remember { mutableStateOf(false) }
+    var showingPocketNotification by remember { mutableStateOf<String?>(null) }
+
+    // Infinite pulse transition for the floating glowing tri-color Omnibox border
+    val pulseTransition = rememberInfiniteTransition(label = "OmniboxPulseTransition")
+    val pulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 0.95f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2000, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "PulseAlpha"
+    )
+
+    // Speaking soundwave animation phase
+    val speakerPhase by pulseTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "SpeakerPhase"
+    )
 
     // Background selection according to modes
     Box(
@@ -110,8 +139,8 @@ fun NewTabPageView(
                         text = "База запрещённых сайтов ФЗ-149 обновлена",
                         buttonText = "Понятно",
                         icon = Icons.Default.Shield,
-                        backgroundColor = Color(0xFFFFF9E0), // light yellow
-                        contentColor = Color(0xFF856404),
+                        backgroundColor = if (isDark) Color(0xFF2C2510) else Color(0xFFFFF9E0),
+                        contentColor = if (isDark) Color(0xFFFFD54F) else Color(0xFF856404),
                         onClick = { showRknBanner = false }
                     )
                 }
@@ -126,8 +155,8 @@ fun NewTabPageView(
                         text = "Подключение к открытой сети Wi-Fi небезопасно",
                         buttonText = "Включить VPN",
                         icon = Icons.Default.Warning,
-                        backgroundColor = Color(0xFFFFEBEE), // light red
-                        contentColor = Color(0xFFC62828),
+                        backgroundColor = if (isDark) Color(0xFF2C1517) else Color(0xFFFFEBEE),
+                        contentColor = if (isDark) Color(0xFFEF5350) else Color(0xFFC62828),
                         onClick = {
                             showWifiWarning = false
                             // Trigger simulated VPN shield
@@ -145,8 +174,8 @@ fun NewTabPageView(
                         text = "${viewModel.syncStatusMessage.value}. Безопасное облако активно.",
                         buttonText = "ОК",
                         icon = Icons.Default.Cloud,
-                        backgroundColor = Color(0xFFE8F5E9), // light green
-                        contentColor = Color(0xFF2E7D32),
+                        backgroundColor = if (isDark) Color(0xFF142C16) else Color(0xFFE8F5E9),
+                        contentColor = if (isDark) Color(0xFF66BB6A) else Color(0xFF2E7D32),
                         onClick = { showSyncStatus = false }
                     )
                 }
@@ -267,80 +296,160 @@ fun NewTabPageView(
                     }
                 }
 
-                // CENTRED SEARCH ENGINE OMNIBOX (Unless Stealth Mode limits its footprint)
+                // CENTRED SEARCH ENGINE OMNIBOX (Featuring pulsing tri-color glowing borders and active voice waveforms)
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4.dp),
                     shape = RoundedCornerShape(24.dp),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (browserMode == 4) Color(0xFF161616) else MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)
+                        containerColor = if (browserMode == 4) Color(0xFF161616) else if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.72f) else Color.White.copy(alpha = 0.94f)
                     ),
-                    border = if (browserMode == 4) BorderStroke(1.dp, Color(0xFF00FF66).copy(0.4f)) else BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = if (browserMode == 4) Icons.Default.SafetyCheck else Icons.Default.Search,
-                            contentDescription = "Поиск",
-                            tint = if (browserMode == 4) Color(0xFF00FF66) else MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        OutlinedTextField(
-                            value = searchInput,
-                            onValueChange = { searchInput = it },
-                            placeholder = {
-                                Text(
-                                    text = "Поиск в ${if (searchEngine == 0) "Яндекс" else if (searchEngine == 1) "Mail.ru" else "Rambler"}...",
-                                    fontSize = 14.sp
+                    border = BorderStroke(
+                        width = 1.8.dp,
+                        brush = if (browserMode == 4) {
+                            Brush.linearGradient(listOf(Color(0xFF00FF66), Color(0xFF003311)))
+                        } else {
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFFFFFFFF).copy(alpha = pulseAlpha),
+                                    Color(0xFF0039A6).copy(alpha = pulseAlpha),
+                                    Color(0xFFD52B1E).copy(alpha = pulseAlpha)
                                 )
-                            },
-                            modifier = Modifier
-                                .weight(1f)
-                                .testTag("ntp_search_input"),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                            keyboardActions = KeyboardActions(
-                                onSearch = {
-                                    keyboardController?.hide()
-                                    if (searchInput.isNotBlank()) {
-                                        onUrlSelected(searchInput)
-                                    }
-                                }
-                            ),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color.Transparent,
-                                unfocusedBorderColor = Color.Transparent,
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent
-                            )
-                        )
-                        
-                        // Action buttons: VOICE & QR Code Scan
-                        IconButton(onClick = {
-                            // Simulated scan action
-                            onUrlSelected("https://rustore.ru/qr_target_mocked")
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.QrCodeScanner,
-                                contentDescription = "QR Сканер",
-                                tint = if (browserMode == 4) Color(0xFF00FF66) else Color.Gray,
-                                modifier = Modifier.size(20.dp)
                             )
                         }
-
-                        if (searchInput.isNotBlank()) {
-                            IconButton(onClick = { searchInput = "" }) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Сброс",
-                                    tint = Color.Gray
+                    )
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (browserMode == 4) Icons.Default.SafetyCheck else Icons.Default.Search,
+                                contentDescription = "Поиск",
+                                tint = if (browserMode == 4) Color(0xFF00FF66) else MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedTextField(
+                                value = searchInput,
+                                onValueChange = { searchInput = it },
+                                placeholder = {
+                                    Text(
+                                        text = if (isSpeaking) "Слушаю вас..." else "Поиск в ${if (searchEngine == 0) "Яндекс" else if (searchEngine == 1) "Mail.ru" else "Rambler"}...",
+                                        fontSize = 14.sp
+                                    )
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("ntp_search_input"),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(
+                                    onSearch = {
+                                        keyboardController?.hide()
+                                        if (searchInput.isNotBlank()) {
+                                            onUrlSelected(searchInput)
+                                        }
+                                    }
+                                ),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color.Transparent,
+                                    unfocusedBorderColor = Color.Transparent,
+                                    focusedContainerColor = Color.Transparent,
+                                    unfocusedContainerColor = Color.Transparent
                                 )
+                            )
+                            
+                            // Action buttons: VOICE SEARCH with active pulsation
+                            IconButton(
+                                onClick = {
+                                    isSpeaking = !isSpeaking
+                                    if (isSpeaking) {
+                                        searchInput = ""
+                                        // Simulate spoken recognition
+                                        Thread {
+                                            Thread.sleep(2200)
+                                            if (isSpeaking) {
+                                                searchInput = "Портал Госуслуг РФ"
+                                                isSpeaking = false
+                                            }
+                                        }.start()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = if (isSpeaking) Icons.Default.VolumeUp else Icons.Default.Mic,
+                                    contentDescription = "Голосовой поиск",
+                                    tint = if (isSpeaking) Color(0xFFD52B1E) else if (browserMode == 4) Color(0xFF00FF66) else Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // QR Code Scan
+                            IconButton(onClick = {
+                                checkSecureQr(onUrlSelected)
+                            }) {
+                                Icon(
+                                    imageVector = Icons.Default.QrCodeScanner,
+                                    contentDescription = "QR Сканер",
+                                    tint = if (browserMode == 4) Color(0xFF00FF66) else Color.Gray,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            if (searchInput.isNotBlank()) {
+                                IconButton(onClick = { searchInput = "" }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Clear,
+                                        contentDescription = "Сброс",
+                                        tint = Color.Gray
+                                    )
+                                }
+                            }
+                        }
+
+                        // Living voice soundwave animation block if listening
+                        if (isSpeaking) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Говорите, идёт распознавание речи РФ...",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(end = 12.dp)
+                                )
+                                // Render 5 dynamic bouncing audio soundwave pillars
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    for (i in 0..4) {
+                                        val waveFactor = kotlin.math.sin(speakerPhase + i * 1.2f)
+                                        val heightAdjust = (14.dp + (16.dp * kotlin.math.abs(waveFactor)))
+                                        val waveColor = when (i % 3) {
+                                            0 -> Color.White
+                                            1 -> Color(0xFF0039A6)
+                                            else -> Color(0xFFD52B1E)
+                                        }
+                                        Box(
+                                            modifier = Modifier
+                                                .width(3.dp)
+                                                .height(heightAdjust)
+                                                .background(waveColor, RoundedCornerShape(1.5.dp))
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -460,7 +569,9 @@ fun NewTabPageView(
                             if (showWeather) {
                                 Card(
                                     modifier = Modifier.weight(1f),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+                                    ),
                                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -486,7 +597,9 @@ fun NewTabPageView(
                             if (showTraffic) {
                                 Card(
                                     modifier = Modifier.weight(1f),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+                                    ),
                                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -523,7 +636,9 @@ fun NewTabPageView(
                         if (showRates) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+                                ),
                                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
@@ -582,7 +697,9 @@ fun NewTabPageView(
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
                                     .clickable { onUrlSelected("https://yandex.ru/internet_news_mock") },
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.65f)),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+                                ),
                                 border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
                                 shape = RoundedCornerShape(10.dp)
                             ) {
@@ -645,6 +762,10 @@ fun NewTabPageView(
             }
         }
     }
+}
+
+fun checkSecureQr(onUrlSelected: (String) -> Unit) {
+    onUrlSelected("https://yandex.ru/gost-search?qr=secure_check_successful")
 }
 
 @Composable

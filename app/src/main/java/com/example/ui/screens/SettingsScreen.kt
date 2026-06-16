@@ -476,6 +476,199 @@ fun SettingsScreen(
                     }
                 }
 
+                // NEW SECTION: CUSTOM BLOCKLIST MANAGER
+                var blocklistSearchQuery by remember { mutableStateOf("") }
+                var showAddBlocklistDialog by remember { mutableStateOf(false) }
+                var newBlocklistPattern by remember { mutableStateOf("") }
+                var newBlocklistReason by remember { mutableStateOf("") }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "Редактор реестра запретов",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            IconButton(
+                                onClick = { showAddBlocklistDialog = true },
+                                modifier = Modifier.testTag("add_blocked_domain_btn")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AddCircle,
+                                    contentDescription = "Добавить запрет",
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        
+                        Text(
+                            "Добавляйте, ищите и удаляйте заблокированные доменные регулярные шаблоны из базы данных.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            lineHeight = 15.sp,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+
+                        // Realtime database filter input
+                        OutlinedTextField(
+                            value = blocklistSearchQuery,
+                            onValueChange = { blocklistSearchQuery = it },
+                            placeholder = { Text("Поиск в базе по домену...", fontSize = 13.sp) },
+                            leadingIcon = { Icon(Icons.Default.Search, null, modifier = Modifier.size(18.dp)) },
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                            )
+                        )
+
+                        // Show matched database records
+                        val matchedBlocked = remember(blockedUrls, blocklistSearchQuery) {
+                            if (blocklistSearchQuery.isBlank()) {
+                                blockedUrls.take(10)
+                            } else {
+                                blockedUrls.filter {
+                                    it.pattern.contains(blocklistSearchQuery, ignoreCase = true) ||
+                                    it.reason.contains(blocklistSearchQuery, ignoreCase = true)
+                                }
+                            }
+                        }
+
+                        if (matchedBlocked.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "В базе нет записей, соответствующих запросу.",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        } else {
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 240.dp).verticalScroll(rememberScrollState())
+                            ) {
+                                matchedBlocked.forEach { item ->
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = item.pattern,
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 12.sp,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                                Text(
+                                                    text = item.reason,
+                                                    fontSize = 10.sp,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 2,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { viewModel.deleteBlockedUrl(item.id) },
+                                                modifier = Modifier.size(32.dp).testTag("delete_blocked_${item.pattern}")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Удалить",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (blockedUrls.size > 10 && blocklistSearchQuery.isBlank()) {
+                                Text(
+                                    "Показано 10 из ${blockedUrls.size} правил. Воспользуйтесь поиском выше для нахождения других записей.",
+                                    fontSize = 9.sp,
+                                    color = Color.Gray,
+                                    modifier = Modifier.padding(top = 4.dp, start = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (showAddBlocklistDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showAddBlocklistDialog = false
+                            newBlocklistPattern = ""
+                            newBlocklistReason = ""
+                        },
+                        title = { Text("Внести сетевое правило", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+                        text = {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text("Доменное имя или шаблон будет автоматически заблокировано во всех режимах серфинга.", fontSize = 12.sp)
+                                OutlinedTextField(
+                                    value = newBlocklistPattern,
+                                    onValueChange = { newBlocklistPattern = it },
+                                    label = { Text("Шаблон домена (напр., badsite.com)") },
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth().testTag("add_blocked_pattern_input")
+                                )
+                                OutlinedTextField(
+                                    value = newBlocklistReason,
+                                    onValueChange = { newBlocklistReason = it },
+                                    label = { Text("Законодательное обоснование") },
+                                    modifier = Modifier.fillMaxWidth().testTag("add_blocked_reason_input")
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    if (newBlocklistPattern.isNotBlank()) {
+                                        viewModel.addBlockedUrl(newBlocklistPattern, newBlocklistReason)
+                                        showAddBlocklistDialog = false
+                                        newBlocklistPattern = ""
+                                        newBlocklistReason = ""
+                                    }
+                                },
+                                modifier = Modifier.testTag("confirm_add_blocked_btn")
+                            ) {
+                                Text("Заблокировать")
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = {
+                                showAddBlocklistDialog = false
+                                newBlocklistPattern = ""
+                                newBlocklistReason = ""
+                            }) {
+                                Text("Отмена")
+                            }
+                        }
+                    )
+                }
 
                 // SECTION 4: SECURITY & CERTIFICATES (TRUST STORE MINTSIRY)
                 SectionHeader(title = "Шифрование и Сертификаты", icon = Icons.Default.Shield)

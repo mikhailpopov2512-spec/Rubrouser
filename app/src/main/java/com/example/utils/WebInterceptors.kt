@@ -14,6 +14,61 @@ object WebInterceptors {
     // Simple cache for checked URLs to boost performance
     private val blockCache = java.util.concurrent.ConcurrentHashMap<String, CacheEntry>()
 
+    fun extractHost(urlStr: String): String {
+        if (urlStr.isBlank()) return ""
+        try {
+            var startIndex = 0
+            val lower = urlStr.lowercase()
+            if (lower.startsWith("http://")) {
+                startIndex = 7
+            } else if (lower.startsWith("https://")) {
+                startIndex = 8
+            }
+            var endIndex = urlStr.indexOf('/', startIndex)
+            if (endIndex == -1) {
+                endIndex = urlStr.indexOf('?', startIndex)
+            }
+            if (endIndex == -1) {
+                endIndex = urlStr.indexOf('#', startIndex)
+            }
+            var host = if (endIndex == -1) {
+                urlStr.substring(startIndex)
+            } else {
+                urlStr.substring(startIndex, endIndex)
+            }
+            val colonIdx = host.indexOf(':')
+            if (colonIdx != -1) {
+                host = host.substring(0, colonIdx)
+            }
+            return host.lowercase().trim()
+        } catch (e: Exception) {
+            return try {
+                android.net.Uri.parse(urlStr).host?.lowercase() ?: ""
+            } catch (ex: Exception) {
+                ""
+            }
+        }
+    }
+
+    fun getHostAndParents(host: String): List<String> {
+        val result = java.util.ArrayList<String>()
+        val cleanHost = host.trim().lowercase()
+        if (cleanHost.isBlank()) return result
+        result.add(cleanHost)
+        var current = cleanHost
+        while (true) {
+            val nextDot = current.indexOf('.')
+            if (nextDot == -1 || nextDot == current.length - 1) break
+            current = current.substring(nextDot + 1)
+            if (current.contains('.')) {
+                result.add(current)
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
     /**
      * Checks if a domain/url is blocked.
      * Caches hits to prevent slow database lookups on every image/subresource.
@@ -27,18 +82,20 @@ object WebInterceptors {
             return@withContext false
         }
 
-        val host = try {
-            val cleanStr = if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
-                "http://$urlStr"
-            } else {
-                urlStr
+        val host = extractHost(urlStr)
+        if (host.isBlank()) return@withContext false
+
+        // 1. FAST MEMORY CHECK USING LRU CACHED SUBDOMAINS
+        val parents = getHostAndParents(host)
+        for (parent in parents) {
+            val cachedUrl = RknBlocklistManager.blockedInfoCache.get(parent)
+            if (cachedUrl != null) {
+                onBlockDetected(cachedUrl)
+                return@withContext true
             }
-            URL(cleanStr).host?.lowercase() ?: ""
-        } catch (e: Exception) {
-            urlStr.lowercase().trim()
         }
 
-        // Cache lookup
+        // 2. BACKUP LOCAL INTERCEPTOR CACHE LOOKUP
         val cached = blockCache[host]
         if (cached != null) {
             val cachedResult = cached.matched
@@ -49,11 +106,13 @@ object WebInterceptors {
             return@withContext false
         }
 
-        // DB lookup
+        // 3. FAST DATABASE DELEGATE LOOKUP
         val matched = repository.checkBlockedUrl(urlStr)
         blockCache[host] = CacheEntry(matched)
 
         if (matched != null) {
+            val cleanPattern = matched.pattern.lowercase().trim()
+            RknBlocklistManager.blockedInfoCache.put(cleanPattern, matched)
             onBlockDetected(matched)
             return@withContext true
         }
@@ -108,16 +167,8 @@ object WebInterceptors {
             return true
         }
 
-        val host = try {
-            val cleanStr = if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
-                "http://$urlStr"
-            } else {
-                urlStr
-            }
-            URL(cleanStr).host?.lowercase() ?: ""
-        } catch (e: Exception) {
-            return false
-        }
+        val host = extractHost(urlStr)
+        if (host.isBlank()) return false
 
         return adDomains.any { adDomain ->
             host == adDomain || host.endsWith(".$adDomain")

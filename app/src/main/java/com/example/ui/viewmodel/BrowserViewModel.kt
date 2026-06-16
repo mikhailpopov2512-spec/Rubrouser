@@ -166,6 +166,18 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun addBlockedUrl(pattern: String, reason: String) {
+        viewModelScope.launch {
+            repository.addBlockedUrl(pattern.lowercase().trim(), reason.ifBlank { "Решение Роскомнадзора об ограничении доступа к сайту" })
+        }
+    }
+
+    fun deleteBlockedUrl(id: Int) {
+        viewModelScope.launch {
+            repository.deleteBlockedUrl(id)
+        }
+    }
+
     fun restoreBlocklistDefaults() {
         viewModelScope.launch {
             isUpdatingRknList.value = true
