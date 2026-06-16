@@ -68,21 +68,46 @@ object WebInterceptors {
     }
 
     /**
-     * Simple ad-block matching list containing common trackers and ad scripts
+     * Comprehensive ad-block matching list containing common Russian and global trackers, counters, and ad networks
      */
     private val adDomains = listOf(
         "google-analytics.com",
         "googletagmanager.com",
         "doubleclick.net",
-        "yandex.ru/clck", // trackings
-        "mc.yandex.ru", // metrica
+        "analytics.google.com",
+        "adservice.google.com",
+        "googleads.g.doubleclick.net",
+        "stats.g.doubleclick.net",
+        "mc.yandex.ru", // Yandex Metrika
+        "clck.yandex.ru", 
+        "an.yandex.ru", // Yandex Partner Ads
         "ads.adfox.ru",
+        "ad.adriver.ru",
+        "top-fwz1.mail.ru", // Mail.ru counter
         "scorecardresearch.com",
         "adnxs.com",
-        "adservice.google.com"
+        "ads.vk.com", // VK Ads
+        "tns-counter.ru", // Mediascope tracker
+        "criteo.com",
+        "hotjar.com",
+        "amplitude.com",
+        "mixpanel.com"
     )
 
     fun isAdRequest(urlStr: String): Boolean {
+        val lowercaseUrl = urlStr.lowercase()
+        // Check for common scripts and tracking paths embedded in URLs
+        if (lowercaseUrl.contains("/metrika.js") || 
+            lowercaseUrl.contains("/analytics.js") || 
+            lowercaseUrl.contains("/gtm.js") ||
+            lowercaseUrl.contains("yandex.ru/clck") ||
+            lowercaseUrl.contains("/adservice?") ||
+            lowercaseUrl.contains("/pagead/") ||
+            lowercaseUrl.contains("partner.googleadservices")
+        ) {
+            return true
+        }
+
         val host = try {
             val cleanStr = if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
                 "http://$urlStr"

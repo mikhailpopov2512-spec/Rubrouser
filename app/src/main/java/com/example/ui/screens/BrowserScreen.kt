@@ -30,7 +30,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.example.ui.components.RussianFlagBackdrop
+import com.example.ui.components.PremiumBackdrop
 import com.example.ui.viewmodel.BrowserViewModel
 import com.example.utils.WebInterceptors
 import kotlinx.coroutines.launch
@@ -493,6 +493,21 @@ fun BrowserScreen(
                                         Log.d("RosAdBlock", "Blocked ad request: $url")
                                         return WebResourceResponse(
                                             "text/javascript",
+                                            "UTF-8",
+                                            ByteArrayInputStream("".toByteArray())
+                                        )
+                                    }
+
+                                    // 2. Intercept resource queries from blocked domains
+                                    val isBlockedDomain = kotlinx.coroutines.runBlocking {
+                                        WebInterceptors.checkRknBlock(url, viewModel.repository) { matchedBlock ->
+                                            viewModel.repository.logBlockedAttempt(url, matchedBlock.reason)
+                                        }
+                                    }
+                                    if (isBlockedDomain) {
+                                        Log.d("RosRknIntercept", "Blocked nested subresource request: $url")
+                                        return WebResourceResponse(
+                                            "text/html",
                                             "UTF-8",
                                             ByteArrayInputStream("".toByteArray())
                                         )

@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.RussianFlagBackdrop
+import com.example.ui.components.PremiumBackdrop
 import com.example.ui.viewmodel.BrowserViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +54,7 @@ fun SettingsScreen(
             .testTag("settings_screen")
     ) {
         // Low-opacity watermark of Russian flag inside settings background
-        RussianFlagBackdrop(isWatermark = true)
+        PremiumBackdrop(isWatermark = true, alphaVal = 0.12f)
 
         Column(
             modifier = Modifier.fillMaxSize()

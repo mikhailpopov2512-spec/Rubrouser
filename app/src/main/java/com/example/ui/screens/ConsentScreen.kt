@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.RussianFlagBackdrop
+import com.example.ui.components.PremiumBackdrop
 
 @Composable
 fun ConsentScreen(
@@ -34,7 +34,7 @@ fun ConsentScreen(
             .testTag("consent_screen")
     ) {
         // Full Russian Flag backdrop with blur-layer
-        RussianFlagBackdrop()
+        PremiumBackdrop()
 
         Column(
             modifier = Modifier

@@ -29,7 +29,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.RussianFlagBackdrop
+import com.example.ui.components.PremiumBackdrop
 import com.example.ui.viewmodel.BrowserViewModel
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -65,26 +65,19 @@ fun NewTabPageView(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                when (browserMode) {
-                    1 -> Color(0xFF1E1E24) // Incognito - Dark Slate Grey
-                    4 -> Color.Black       // Stealth - Pitch Black
-                    else -> MaterialTheme.colorScheme.background
-                }
-            )
             .testTag("new_tab_page")
     ) {
-        // Render Russian Flag Background ONLY in Standard, Guest, and Child modes
+        // Render dynamic immersive background for each browser mode
+        PremiumBackdrop(
+            browserMode = browserMode
+        )
+
+        // Centered fixed holographic watermarked tricolor for Standard, Guest, and Child modes
         if (browserMode != 1 && browserMode != 4) {
-            // Child mode has a bright colorful overlay (~90% white), standard/guest has ~75%
-            RussianFlagBackdrop(
-                alphaVal = if (browserMode == 3) 0.90f else 1.0f
-            )
-            
-            // Centered fixed low-opacity flag watermark (10% opacity) that does not scroll
-            RussianFlagBackdrop(
+            PremiumBackdrop(
+                browserMode = browserMode,
                 isWatermark = true,
-                alphaVal = 0.10f
+                alphaVal = 0.12f
             )
         }
 
