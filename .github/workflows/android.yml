@@ -43,3 +43,10 @@ jobs:
 
     - name: Assemble Debug APK Binaries
       run: gradle :app:assembleDebug --no-daemon
+
+    - name: Upload Debug APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: rosbrowser-debug-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
+
