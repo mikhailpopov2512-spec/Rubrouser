@@ -148,17 +148,30 @@ class RussianFlagBackground {
             val stripHeight = (drawBottom - drawTop) / 3f
             
             // Draw smooth sine-wave paths to eliminate blocky lines and gaps
-            val points = 32
+            val points = 48
             val dx = (drawRight - drawLeft) / points
-            val amplitude = height * 0.016f // Aesthetic waves proportional to screen
-            val frequency = 1.35f * 2f * PI.toFloat() / (drawRight - drawLeft)
+            val amplitude = height * 0.025f
+
+            // Dynamic waving model mimicking progressive, wind-driven fabric behavior
+            val getWaveY = { x: Float ->
+                val xNormal = ((x - drawLeft) / (drawRight - drawLeft)).coerceIn(0f, 1f)
+                // Left is anchored on a pole, flapping intensifies dynamically on the right end
+                val envelope = 0.12f + 0.88f * xNormal
+                
+                // Poly-harmonic waves representing primary gust, secondary wind fluctuation, and micro-flutter
+                val primaryWave = sin(xNormal * 3.1f * PI.toFloat() - phase * 1.6f)
+                val secondaryWave = sin(xNormal * 6.5f * PI.toFloat() - phase * 3.1f)
+                val flutterWave = sin(xNormal * 12.0f * PI.toFloat() - phase * 5.2f)
+                
+                (primaryWave * 0.72f + secondaryWave * 0.22f + flutterWave * 0.06f) * envelope * amplitude
+            }
 
             // --- Strip 1: White ---
             val whitePath = Path()
             whitePath.moveTo(drawLeft, drawTop - 120f)
             for (i in 0..points) {
                 val x = drawLeft + i * dx
-                val y = drawTop + stripHeight + amplitude * sin(x * frequency + phase)
+                val y = drawTop + stripHeight + getWaveY(x)
                 whitePath.lineTo(x, y)
             }
             whitePath.lineTo(drawRight, drawTop - 120f)
@@ -168,16 +181,15 @@ class RussianFlagBackground {
 
             // --- Strip 2: Blue ---
             val bluePath = Path()
-            val y1Start = drawTop + stripHeight + amplitude * sin(drawLeft * frequency + phase)
-            bluePath.moveTo(drawLeft, y1Start)
+            bluePath.moveTo(drawLeft, drawTop + stripHeight + getWaveY(drawLeft))
             for (i in 0..points) {
                 val x = drawLeft + i * dx
-                val y1 = drawTop + stripHeight + amplitude * sin(x * frequency + phase)
+                val y1 = drawTop + stripHeight + getWaveY(x)
                 bluePath.lineTo(x, y1)
             }
             for (i in points downTo 0) {
                 val x = drawLeft + i * dx
-                val y2 = drawTop + stripHeight * 2f + amplitude * sin(x * frequency + phase)
+                val y2 = drawTop + stripHeight * 2f + getWaveY(x)
                 bluePath.lineTo(x, y2)
             }
             bluePath.close()
@@ -186,11 +198,10 @@ class RussianFlagBackground {
 
             // --- Strip 3: Red ---
             val redPath = Path()
-            val y2Start = drawTop + stripHeight * 2f + amplitude * sin(drawLeft * frequency + phase)
-            redPath.moveTo(drawLeft, y2Start)
+            redPath.moveTo(drawLeft, drawTop + stripHeight * 2f + getWaveY(drawLeft))
             for (i in 0..points) {
                 val x = drawLeft + i * dx
-                val y2 = drawTop + stripHeight * 2f + amplitude * sin(x * frequency + phase)
+                val y2 = drawTop + stripHeight * 2f + getWaveY(x)
                 redPath.lineTo(x, y2)
             }
             redPath.lineTo(drawRight, drawBottom + 120f)
@@ -211,11 +222,11 @@ class RussianFlagBackground {
             val sheenGradient = LinearGradient(
                 drawLeft, drawTop, drawRight, drawBottom,
                 intArrayOf(
-                    android.graphics.Color.argb(25, 255, 255, 255), // folds peak reflection
-                    android.graphics.Color.argb(40, 0, 0, 0),       // shadow crease
-                    android.graphics.Color.argb(15, 255, 255, 255), // light glint
-                    android.graphics.Color.argb(35, 0, 0, 0),       // deep wave shadows
-                    android.graphics.Color.argb(25, 255, 255, 255)
+                    android.graphics.Color.argb(if (isDarkTheme) 15 else 25, 255, 255, 255), // folds peak reflection
+                    android.graphics.Color.argb(if (isDarkTheme) 65 else 40, 0, 0, 0),       // shadow crease
+                    android.graphics.Color.argb(if (isDarkTheme) 10 else 15, 255, 255, 255), // light glint
+                    android.graphics.Color.argb(if (isDarkTheme) 60 else 35, 0, 0, 0),       // deep wave shadows
+                    android.graphics.Color.argb(if (isDarkTheme) 15 else 25, 255, 255, 255)
                 ),
                 floatArrayOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f),
                 Shader.TileMode.MIRROR
@@ -279,7 +290,9 @@ fun PremiumBackdrop(
     val blurRadius = when (browserMode) {
         3 -> 24.dp // Kid mode colorful watercolor blended together
         4 -> 0.dp  // Stealth mode remains sharp digital
-        else -> 25.dp // Requirement #2 calls for 25 dp blur radius
+        else -> {
+            if (isDark) 3.dp else 25.dp // Elegant visible flag waving in the wind in beautiful dark theme!
+        }
     }
 
     val blurModifier = if (!isWatermark && blurRadius > 0.dp && android.os.Build.VERSION.SDK_INT >= 31) {
