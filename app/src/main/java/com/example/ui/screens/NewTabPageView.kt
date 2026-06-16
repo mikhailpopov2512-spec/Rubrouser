@@ -313,7 +313,6 @@ fun NewTabPageView(
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                text = "STEALTH ACTIVE"
                                 Text(
                                     text = "STEALTH ACTIVE",
                                     fontWeight = FontWeight.Bold,
@@ -913,12 +912,12 @@ fun InteractiveTileCard(
                     detectTapGestures(
                         onPress = {
                             isPressed = true
-                            haptic.performHapticFeedback(androidx.compose.ui.platform.HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                             tryAwaitRelease()
                             isPressed = false
                         },
                         onTap = {
-                            haptic.performHapticFeedback(androidx.compose.ui.platform.HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                             onUrlSelected(tile.url)
                         }
                     )
@@ -955,7 +954,7 @@ fun InteractiveTileCard(
                         .size(16.dp)
                         .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                         .clickable {
-                            haptic.performHapticFeedback(androidx.compose.ui.platform.HapticFeedbackType.LongPress)
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                             isShattered = true
                             android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
                                 onDelete()
