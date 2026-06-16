@@ -185,133 +185,174 @@ object WebInterceptors {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Доступ ограничен</title>
+                <title>Доступ ограничен • Росбраузер</title>
                 <style>
                     body {
                         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                        background-color: #0f1013;
-                        color: #e2e8f0;
+                        background: radial-gradient(circle at center, rgba(10, 11, 14, 0.94) 30%, rgba(5, 5, 7, 0.98) 100%),
+                                    linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.07) 33.3%, rgba(0,57,166,0.08) 33.3%, rgba(0,57,166,0.08) 66.6%, rgba(213,43,30,0.08) 66.6%, rgba(213,43,30,0.08) 100%);
+                        background-size: cover;
+                        background-attachment: fixed;
+                        color: #f1f5f9;
                         margin: 0;
                         padding: 0;
                         display: flex;
                         align-items: center;
                         justify-content: center;
                         min-height: 100vh;
-                        text-align: center;
+                        overflow: hidden;
                     }
                     .container {
-                        max-width: 580px;
-                        padding: 40px 24px;
-                        background: rgba(30, 41, 59, 0.4);
-                        border-radius: 16px;
-                        border: 1px solid rgba(239, 68, 68, 0.3);
-                        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-                        backdrop-filter: blur(10px);
-                        margin: 16px;
+                        max-width: 540px;
+                        width: 90%;
+                        padding: 40px 30px;
+                        background: rgba(15, 23, 42, 0.75);
+                        border-radius: 20px;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(255, 255, 255, 0.05);
+                        backdrop-filter: blur(25px) saturate(140%);
+                        -webkit-backdrop-filter: blur(25px) saturate(140%);
+                        text-align: center;
+                        animation: fadeIn 0.4s ease-out;
                     }
-                    .icon {
-                        font-size: 64px;
+                    .badge {
+                        display: inline-flex;
+                        align-items: center;
+                        background: rgba(239, 68, 68, 0.15);
+                        border: 1px solid rgba(239, 68, 68, 0.4);
+                        color: #f87171;
+                        font-weight: 700;
+                        font-size: 11px;
+                        letter-spacing: 1.5px;
+                        padding: 6px 16px;
+                        border-radius: 20px;
                         margin-bottom: 24px;
-                        color: #ef4444;
-                        animation: pulse 2s infinite;
+                        text-transform: uppercase;
                     }
                     h1 {
-                        font-size: 28px;
-                        color: #ef4444;
-                        margin: 0 0 16px 0;
+                        font-size: 26px;
+                        color: #ffffff;
+                        margin: 0 0 12px 0;
                         letter-spacing: 1px;
-                        font-weight: 800;
+                        font-weight: 900;
+                        text-shadow: 0 2px 10px rgba(0,0,0,0.3);
                     }
-                    .warning-text {
-                        font-size: 16px;
-                        line-height: 1.6;
-                        color: #cbd5e1;
-                        margin-bottom: 24px;
-                    }
-                    .meta-info {
-                        text-align: left;
-                        background: rgba(15, 16, 20, 0.6);
-                        padding: 16px;
-                        border-radius: 8px;
-                        border-left: 4px solid #ef4444;
+                    .sub-title {
                         font-size: 14px;
+                        color: #94a3b8;
+                        margin-bottom: 30px;
                         line-height: 1.5;
+                    }
+                    .blocked-card {
+                        background: rgba(8, 10, 15, 0.5);
+                        border-left: 4px solid #ef4444;
+                        padding: 16px 20px;
+                        border-radius: 8px;
+                        text-align: left;
                         margin-bottom: 30px;
                     }
-                    .meta-item {
-                        margin-bottom: 8px;
+                    .card-item {
+                        margin-bottom: 10px;
+                        font-size: 13px;
                     }
-                    .meta-item:last-child {
+                    .card-item:last-child {
                         margin-bottom: 0;
                     }
-                    .meta-label {
-                        color: #94a3b8;
-                        font-weight: 600;
+                    .card-label {
+                        color: #64748b;
+                        font-weight: 700;
+                        display: block;
+                        margin-bottom: 2px;
+                        text-transform: uppercase;
+                        font-size: 10px;
+                        letter-spacing: 0.8px;
                     }
-                    a.btn {
-                        display: inline-block;
-                        background-color: #ef4444;
+                    .card-val {
+                        color: #e2e8f0;
+                        word-break: break-all;
+                        font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+                    }
+                    .btn-row {
+                        display: flex;
+                        gap: 12px;
+                        justify-content: center;
+                        flex-wrap: wrap;
+                    }
+                    .btn {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
                         color: #ffffff;
                         text-decoration: none;
-                        padding: 12px 28px;
-                        border-radius: 8px;
-                        font-weight: 600;
-                        font-size: 15px;
-                        transition: background-color 0.2s, transform 0.1s;
-                        border: none;
-                        cursor: pointer;
-                        margin: 4px;
+                        padding: 12px 24px;
+                        border-radius: 10px;
+                        font-weight: 700;
+                        font-size: 14px;
+                        transition: all 0.2s ease;
+                        box-shadow: 0 4px 15px rgba(239, 68, 68, 0.3);
                     }
-                    a.btn:hover {
-                        background-color: #dc2626;
+                    .btn:hover {
+                        transform: translateY(-2px);
+                        box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
                     }
-                    a.btn-secondary {
-                        background-color: transparent;
-                        border: 1px solid #475569;
-                        color: #94a3b8;
+                    .btn:active {
+                        transform: translateY(0);
                     }
-                    a.btn-secondary:hover {
-                        background-color: rgba(255, 255, 255, 0.05);
+                    .btn-secondary {
+                        background: rgba(255, 255, 255, 0.08);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
                         color: #cbd5e1;
+                        box-shadow: none;
                     }
-                    .footer {
-                        margin-top: 30px;
-                        font-size: 12px;
-                        color: #64748b;
+                    .btn-secondary:hover {
+                        background: rgba(255, 255, 255, 0.15);
+                        border-color: rgba(255, 255, 255, 0.2);
+                        color: #ffffff;
+                        box-shadow: none;
                     }
-                    @keyframes pulse {
-                        0% { transform: scale(1); }
-                        50% { transform: scale(1.05); }
-                        100% { transform: scale(1); }
+                    .footer-brand {
+                        margin-top: 35px;
+                        font-size: 11px;
+                        color: #475569;
+                        letter-spacing: 1px;
+                        font-weight: 700;
+                        text-transform: uppercase;
+                    }
+                    @keyframes fadeIn {
+                        from { opacity: 0; transform: scale(0.96); }
+                        to { opacity: 1; transform: scale(1); }
                     }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <div class="icon">🔍</div>
+                    <div class="badge">⚠️ ФЗ-149 Ограничение</div>
                     <h1>ДОСТУП ОГРАНИЧЕН</h1>
-                    <p class="warning-text">
-                        Доступ к запрашиваемому интернет-ресурсу ограничен в соответствии с законодательством Российской Федерации.
-                    </p>
+                    <div class="sub-title">Навещаемый сетевой узел временно заблокирован Федеральной службой по надзору в сфере связи, информационных технологий и массовых коммуникаций РФ.</div>
                     
-                    <div class="meta-info">
-                        <div class="meta-item">
-                            <span class="meta-label">Заблокированный адрес:</span> 
-                            <span style="color: #ef4444; word-break: break-all;">$url</span>
+                    <div class="blocked-card">
+                        <div class="card-item">
+                            <span class="card-label">Сетевой адрес:</span>
+                            <span class="card-val" style="color: #f87171;">$url</span>
                         </div>
-                        <div class="meta-item">
-                            <span class="meta-label">Основание:</span> $reason
+                        <div class="card-item">
+                            <span class="card-label">Причина блокировки:</span>
+                            <span class="card-val">$reason</span>
                         </div>
-                        <div class="meta-item">
-                            <span class="meta-label">Нормативный акт:</span> Закон об информации, информационных технологиях и о защите информации ($law)
+                        <div class="card-item">
+                            <span class="card-label">Основание закона:</span>
+                            <span class="card-val" style="font-size:12px;">ФЗ-149 «Об информации, информационных технологиях и о защите информации» ($law)</span>
                         </div>
                     </div>
 
-                    <a href="https://blocklist.rkn.gov.ru" class="btn" target="_blank">Проверить в реестре РКН</a>
-                    <a href="about:home" class="btn btn-secondary">На главную</a>
+                    <div class="btn-row">
+                        <a href="https://blocklist.rkn.gov.ru" class="btn" target="_blank">Реестр РКН</a>
+                        <a href="about:home" class="btn btn-secondary">Вернуться назад</a>
+                    </div>
                     
-                    <div class="footer">
-                        Национальная система фильтрации трафика • Росбраузер
+                    <div class="footer-brand">
+                        Суверенный контур безопасности • Росбраузер
                     </div>
                 </div>
             </body>

@@ -3,10 +3,11 @@ package com.example.ui.screens
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -18,9 +19,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -33,6 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.PremiumBackdrop
 import com.example.ui.viewmodel.BrowserViewModel
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.Stroke
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -49,7 +56,7 @@ fun NewTabPageView(
     val browserMode by viewModel.currentBrowserMode.collectAsState() // 0=Std, 1=Incognito, 2=Guest, 3=Child, 4=Stealth
     val isDark = com.example.ui.theme.ThemeManager.LocalDarkTheme.current
 
-    // Banners alerts dimiss state
+    // Banners alerts dismiss state
     var showRknBanner by remember { mutableStateOf(true) }
     var showWifiWarning by remember { mutableStateOf(true) }
     var showSyncStatus by remember { mutableStateOf(true) }
@@ -62,10 +69,38 @@ fun NewTabPageView(
 
     var searchInput by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
+    val coroutineScope = rememberCoroutineScope()
 
-    // Premium interactive elements state (releasing 56 improvements)
+    val sovereignTiles = remember {
+        listOf(
+            QuickServiceTile("Яндекс", "https://ya.ru", Icons.Default.Search, Color(0xFFD52B1E)),
+            QuickServiceTile("Госуслуги", "https://www.gosuslugi.ru", Icons.Default.AccountBalance, Color(0xFF0C5BFF)),
+            QuickServiceTile("RuStore", "https://rustore.ru", Icons.Default.Shop, Color(0xFF33BB55)),
+            QuickServiceTile("VK Новости", "https://vk.com", Icons.Default.Group, Color(0xFF0077FF)),
+            QuickServiceTile("Яндекс.Почта", "https://mail.yandex.ru", Icons.Default.Email, Color(0xFFFFB300)),
+            QuickServiceTile("Кинопоиск", "https://www.kinopoisk.ru", Icons.Default.Tv, Color(0xFFFF5722)),
+            QuickServiceTile("Яндекс.Карты", "https://yandex.ru/maps", Icons.Default.Map, Color(0xFF4CAF50)),
+            QuickServiceTile("Яндекс.Музыка", "https://music.yandex.ru", Icons.Default.MusicNote, Color(0xFFE040FB))
+        )
+    }
+
+    val approvedChildTiles = remember {
+        listOf(
+            QuickServiceTile("Детские Госуслуги", "https://www.gosuslugi.ru", Icons.Default.AccountBalance, Color(0xFF0C5BFF)),
+            QuickServiceTile("Чебурашка", "https://www.cheburashka-film.ru", Icons.Default.Face, Color(0xFFFF3D00)),
+            QuickServiceTile("Мультфильмы", "https://rutube.ru", Icons.Default.Tv, Color(0xFFE50914)),
+            QuickServiceTile("Детские игры", "https://yandex.ru/games", Icons.Default.Gamepad, Color(0xFF00E676))
+        )
+    }
+
+    val tilesState = remember(browserMode) {
+        mutableStateListOf<QuickServiceTile>().apply {
+            addAll(if (browserMode == 3) approvedChildTiles else sovereignTiles)
+        }
+    }
+
+    // Premium interactive elements state
     var isSpeaking by remember { mutableStateOf(false) }
-    var showingPocketNotification by remember { mutableStateOf<String?>(null) }
 
     // Infinite pulse transition for the floating glowing tri-color Omnibox border
     val pulseTransition = rememberInfiniteTransition(label = "OmniboxPulseTransition")
@@ -278,6 +313,7 @@ fun NewTabPageView(
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
+                                text = "STEALTH ACTIVE"
                                 Text(
                                     text = "STEALTH ACTIVE",
                                     fontWeight = FontWeight.Bold,
@@ -371,13 +407,13 @@ fun NewTabPageView(
                                     if (isSpeaking) {
                                         searchInput = ""
                                         // Simulate spoken recognition
-                                        Thread {
-                                            Thread.sleep(2200)
+                                        coroutineScope.launch {
+                                            delay(2200)
                                             if (isSpeaking) {
                                                 searchInput = "Портал Госуслуг РФ"
                                                 isSpeaking = false
                                             }
-                                        }.start()
+                                        }
                                     }
                                 }
                             ) {
@@ -460,7 +496,7 @@ fun NewTabPageView(
                 // RENDER TABLO GRIDS OR WIDGETS
                 // (Incognito / Stealth Modes have no Tablo or external widgets as defined in the spec!)
                 if (browserMode != 1 && browserMode != 4) {
-                    
+
                     // SECTION 1: TABLO SITES GRID (Favorite panel)
                     Text(
                         text = "ТАБЛО БЫСТРОГО ДОСТУПА",
@@ -471,78 +507,46 @@ fun NewTabPageView(
                         modifier = Modifier.align(Alignment.Start).padding(start = 6.dp, bottom = 10.dp)
                     )
 
-                    // Default set of Russian sovereign websites combined with custom brand colors
-                    // In child mode, we filter strictly to parent-approved friendly websites!
-                    val sovereignTiles = listOf(
-                        QuickServiceTile("Яндекс", "https://ya.ru", Icons.Default.Search, Color(0xFFD52B1E)),
-                        QuickServiceTile("Госуслуги", "https://www.gosuslugi.ru", Icons.Default.AccountBalance, Color(0xFF0C5BFF)),
-                        QuickServiceTile("RuStore", "https://rustore.ru", Icons.Default.Shop, Color(0xFF33BB55)),
-                        QuickServiceTile("VK Новости", "https://vk.com", Icons.Default.Group, Color(0xFF0077FF)),
-                        QuickServiceTile("Яндекс.Почта", "https://mail.yandex.ru", Icons.Default.Email, Color(0xFFFFB300)),
-                        QuickServiceTile("Кинопоиск", "https://www.kinopoisk.ru", Icons.Default.Tv, Color(0xFFFF5722)),
-                        QuickServiceTile("Яндекс.Карты", "https://yandex.ru/maps", Icons.Default.Map, Color(0xFF4CAF50)),
-                        QuickServiceTile("Яндекс.Музыка", "https://music.yandex.ru", Icons.Default.MusicNote, Color(0xFFE040FB))
-                    )
-
-                    val approvedChildTiles = listOf(
-                        QuickServiceTile("Детские Госуслуги", "https://www.gosuslugi.ru", Icons.Default.AccountBalance, Color(0xFF0C5BFF)),
-                        QuickServiceTile("Чебурашка", "https://www.cheburashka-film.ru", Icons.Default.Face, Color(0xFFFF3D00)),
-                        QuickServiceTile("Мультфильмы", "https://rutube.ru", Icons.Default.Tv, Color(0xFFE50914)),
-                        QuickServiceTile("Детские игры", "https://yandex.ru/games", Icons.Default.Gamepad, Color(0xFF00E676))
-                    )
-
-                    val activeTiles = if (browserMode == 3) approvedChildTiles else sovereignTiles
-
                     // LazyVerticalGrid inside Column with fixed height to prevent nesting scroll issues
-                    val gridHeight = if (activeTiles.size > 4) 180.dp else 90.dp
+                    val gridHeight = if (tilesState.size > 3) 180.dp else 95.dp
                     Box(modifier = Modifier.fillMaxWidth().height(gridHeight)) {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(4),
                             modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             userScrollEnabled = false
                         ) {
-                            items(activeTiles) { tile ->
-                                Column(
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(12.dp))
-                                        .clickable { onUrlSelected(tile.url) }
-                                        .padding(top = 4.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(52.dp)
-                                            .background(
-                                                if (browserMode == 3) tile.brandColor.copy(alpha = 0.25f) else Color.White,
-                                                shape = if (browserMode == 3) RoundedCornerShape(14.dp) else RoundedCornerShape(10.dp)
-                                            )
-                                            .border(
-                                                width = if (browserMode == 3) 2.dp else 1.dp,
-                                                color = if (browserMode == 3) tile.brandColor else Color.LightGray.copy(alpha = 0.5f),
-                                                shape = if (browserMode == 3) RoundedCornerShape(14.dp) else RoundedCornerShape(10.dp)
-                                            )
-                                            .testTag("tile_${tile.name.lowercase()}"),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = tile.icon,
-                                            contentDescription = tile.name,
-                                            tint = tile.brandColor,
-                                            modifier = Modifier.size(26.dp)
-                                        )
+                            itemsIndexed(tilesState) { index, tile ->
+                                InteractiveTileCard(
+                                    tile = tile,
+                                    index = index,
+                                    browserMode = browserMode,
+                                    onUrlSelected = { url -> onUrlSelected(url) },
+                                    onDelete = {
+                                        if (tilesState.size > index) {
+                                            tilesState.removeAt(index)
+                                        }
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = tile.name,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
+                                )
+                            }
+                            
+                            // Pulse glowing additive "+" tile (Requirement 16)
+                            item {
+                                InteractivePlusTile(
+                                    onAdd = {
+                                        val extraSites = listOf(
+                                            QuickServiceTile("Habr", "https://habr.com", Icons.Default.Article, Color(0xFF7FA2B2)),
+                                            QuickServiceTile("Sber", "https://sberbank.ru", Icons.Default.Savings, Color(0xFF21A038)),
+                                            QuickServiceTile("Mail.ru", "https://mail.ru", Icons.Default.Email, Color(0xFF1357C6)),
+                                            QuickServiceTile("РТ Новости", "https://rt.com", Icons.Default.Feed, Color(0xFFD32F2F))
+                                        )
+                                        val unadded = extraSites.filter { ex -> !tilesState.any { t -> t.name == ex.name } }
+                                        if (unadded.isNotEmpty()) {
+                                            tilesState.add(unadded.first())
+                                        }
+                                    }
+                                )
                             }
                         }
                     }
@@ -550,7 +554,6 @@ fun NewTabPageView(
                     Spacer(modifier = Modifier.height(20.dp))
 
                     // SECTION 2: LIVE METRICS SUITE WIDGETS
-                    // Only show in Standard mode and when activated individually
                     if (browserMode == 0) {
                         Text(
                             text = "ОТЕЧЕСТВЕННЫЕ СЕРВИСЫ-ВИДЖЕТЫ",
@@ -565,74 +568,21 @@ fun NewTabPageView(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Weather Widget (Яндекс.Погода)
                             if (showWeather) {
-                                Card(
-                                    modifier = Modifier.weight(1f),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
-                                    ),
-                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Погода • Москва", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Icon(imageVector = Icons.Default.WbSunny, contentDescription = "", tint = Color(0xFFFFB300), modifier = Modifier.size(28.dp))
-                                            Text("+24°C", fontSize = 22.sp, fontWeight = FontWeight.Black)
-                                        }
-                                        Text("Переменная облачность", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        Text("Днём: +26° • Ночью: +17°", fontSize = 9.sp, color = Color.Gray)
-                                    }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AnimatedWeatherWidget(isDark = isDark)
                                 }
                             }
 
-                            // Traffic Widget (Яндекс.Пробки)
                             if (showTraffic) {
-                                Card(
-                                    modifier = Modifier.weight(1f),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
-                                    ),
-                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("Пробки • Москва", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            // Traffic lights red/green light logic
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(24.dp)
-                                                    .background(Color(0xFFFFC107), CircleShape), // Yellow lights
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Icon(imageVector = Icons.Default.Traffic, contentDescription = "", tint = Color.White, modifier = Modifier.size(16.dp))
-                                            }
-                                            Text("4 балла", fontSize = 20.sp, fontWeight = FontWeight.Black, color = Color(0xFFFFB300))
-                                        }
-                                        Text("Дороги свободны", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("Движение стабильное", fontSize = 9.sp, color = Color.Gray)
-                                    }
+                                Box(modifier = Modifier.weight(1f)) {
+                                    AnimatedTrafficWidget(isDark = isDark)
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(10.dp))
 
-                        // Currencies Widget (USD / EUR / CNY)
                         if (showRates) {
                             Card(
                                 modifier = Modifier.fillMaxWidth(),
@@ -643,15 +593,33 @@ fun NewTabPageView(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
-                                    Text("Курсы валют ЦБ РФ", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                                    Text("Курсы валют ЦБ РФ • 24ч Тренды", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                                     Spacer(modifier = Modifier.height(8.dp))
                                     Row(
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        CurrencyItem(label = "USD", rate = "89.42 ₽", change = "-0.14", isUp = false)
-                                        CurrencyItem(label = "EUR", rate = "96.15 ₽", change = "+0.28", isUp = true)
-                                        CurrencyItem(label = "CNY", rate = "12.24 ₽", change = "+0.03", isUp = true)
+                                        CurrencyItem(
+                                            label = "USD",
+                                            rate = "91.20 ₽",
+                                            change = "-0.14",
+                                            isUp = false,
+                                            sparkPoints = listOf(0.7f, 0.4f, 0.5f, 0.3f, 0.6f, 0.2f, 0.1f)
+                                        )
+                                        CurrencyItem(
+                                            label = "EUR",
+                                            rate = "99.45 ₽",
+                                            change = "+0.28",
+                                            isUp = true,
+                                            sparkPoints = listOf(0.2f, 0.3f, 0.25f, 0.5f, 0.4f, 0.7f, 0.9f)
+                                        )
+                                        CurrencyItem(
+                                            label = "CNY",
+                                            rate = "12.56 ₽",
+                                            change = "+0.03",
+                                            isUp = true,
+                                            sparkPoints = listOf(0.4f, 0.42f, 0.48f, 0.45f, 0.5f, 0.52f, 0.55f)
+                                        )
                                     }
                                 }
                             }
@@ -660,73 +628,167 @@ fun NewTabPageView(
                         Spacer(modifier = Modifier.height(20.dp))
                     }
 
-                    // SECTION 3: MOCK DZEN NEWS FEED (If enabled)
+                    // SECTION 3: MOCK DZEN NEWS FEED WITH PARALLAX & SKELETONS
                     if (showDzen && browserMode == 0) {
-                        Text(
-                            text = "ОТЕЧЕСТВЕННАЯ ЛЕНТА НОВОСТЕЙ • ДЗЕН",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 11.sp,
-                            letterSpacing = 1.sp,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.align(Alignment.Start).padding(start = 6.dp, bottom = 10.dp)
-                        )
+                        var isRefreshingNews by remember { mutableStateOf(false) }
+                        var isAppendingNews by remember { mutableStateOf(false) }
 
-                        // Dzen News Feed mock items
-                        listOf(
-                            DzenItem(
-                                title = "Отечественные IT-компании завершили локализацию 90% критического софта",
-                                source = "Минцифры РФ",
-                                time = "2 часа назад",
-                                likes = 1251
-                            ),
-                            DzenItem(
-                                title = "Яндекс расширяет сеть зарядных станций для электромобилей по всей России",
-                                source = "Яндекс Новости",
-                                time = "4 часа назад",
-                                likes = 455
-                            ),
-                            DzenItem(
-                                title = "РКН напоминает об ужесточении требований к персональным данным за границей",
-                                source = "ТАСС",
-                                time = "6 часов назад",
-                                likes = 99
+                        val newsItemsState = remember {
+                            mutableStateListOf(
+                                DzenItem("Отечественные IT-компании завершили локализацию 90% критического софта", "Минцифры РФ", "2 часа назад", 1251),
+                                DzenItem("Яндекс расширяет сеть зарядных станций для электромобилей по всей России", "Яндекс Новости", "4 часа назад", 455),
+                                DzenItem("РКН напоминает об ужесточении требований к персональным данным за границей", "ТАСС", "6 часов назад", 99)
                             )
-                        ).forEach { item ->
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable { onUrlSelected("https://yandex.ru/internet_news_mock") },
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
-                                ),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(14.dp)) {
-                                    Text(
-                                        text = item.title,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        lineHeight = 18.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    Row(
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Text(
-                                            text = "${item.source} • ${item.time}",
-                                            fontSize = 11.sp,
-                                            color = Color.Gray
+                        }
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)
+                        ) {
+                            Text(
+                                text = "ОТЕЧЕСТВЕННАЯ ЛЕНТА НОВОСТЕЙ • ДЗЕН",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                letterSpacing = 1.sp,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(start = 6.dp)
+                            )
+                            
+                            // Tricolor pull-to-refresh spinner simulator
+                            IconButton(onClick = {
+                                if (!isRefreshingNews) {
+                                    isRefreshingNews = true
+                                    coroutineScope.launch {
+                                        delay(1100)
+                                        // Update news with a new leading article
+                                        newsItemsState.add(0, DzenItem("Минцифры РФ запустит единую платформу выявления фишинговых сайтов", "Минцифры РФ", "Свежее", 215))
+                                        isRefreshingNews = false
+                                    }
+                                }
+                            }) {
+                                val refreshRotation = remember { Animatable(0f) }
+                                LaunchedEffect(isRefreshingNews) {
+                                    if (isRefreshingNews) {
+                                        refreshRotation.animateTo(
+                                            targetValue = 360f,
+                                            animationSpec = infiniteRepeatable(
+                                                animation = tween(1000, easing = LinearEasing),
+                                                repeatMode = RepeatMode.Restart
+                                            )
                                         )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(imageVector = Icons.Default.ThumbUp, contentDescription = "", tint = Color.Gray, modifier = Modifier.size(12.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(text = item.likes.toString(), fontSize = 11.sp, color = Color.Gray)
+                                    } else {
+                                        refreshRotation.snapTo(0f)
+                                    }
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = "Обновить ленту",
+                                    tint = if (isRefreshingNews) Color(0xFF0039A6) else Color.Gray,
+                                    modifier = Modifier.graphicsLayer { rotationZ = refreshRotation.value }
+                                )
+                            }
+                        }
+
+                        if (isRefreshingNews) {
+                            Column {
+                                SkeletonNewsCard()
+                                SkeletonNewsCard()
+                            }
+                        } else {
+                            newsItemsState.forEachIndexed { index, item ->
+                                val parallaxOffset = (scrollState.value * 0.12f).coerceIn(-60f, 60f)
+                                
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp)
+                                        .clickable { onUrlSelected("https://yandex.ru/internet_news_mock") },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+                                    ),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Column {
+                                        // Parallax Image simulated preview block (Requirement 22)
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(110.dp)
+                                                .clip(RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp))
+                                                .background(Color.DarkGray)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .graphicsLayer { translationY = parallaxOffset }
+                                                    .background(
+                                                        Brush.verticalGradient(
+                                                            listOf(
+                                                                Color(0xFF0039A6).copy(alpha = 0.35f),
+                                                                Color(0xFFD52B1E).copy(alpha = 0.35f)
+                                                            )
+                                                        )
+                                                    )
+                                            )
+                                            Text(
+                                                text = "ДЗЕН ФОТО",
+                                                color = Color.White.copy(alpha = 0.4f),
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 12.sp,
+                                                modifier = Modifier.align(Alignment.Center)
+                                            )
+                                        }
+
+                                        Column(modifier = Modifier.padding(14.dp)) {
+                                            Text(
+                                                text = item.title,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 14.sp,
+                                                lineHeight = 18.sp,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Spacer(modifier = Modifier.height(8.dp))
+                                            Row(
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = "${item.source} • ${item.time}",
+                                                    fontSize = 11.sp,
+                                                    color = Color.Gray
+                                                )
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(imageVector = Icons.Default.ThumbUp, contentDescription = "", tint = Color.Gray, modifier = Modifier.size(12.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(text = item.likes.toString(), fontSize = 11.sp, color = Color.Gray)
+                                                }
+                                            }
                                         }
                                     }
+                                }
+                            }
+                            
+                            if (isAppendingNews) {
+                                SkeletonNewsCard()
+                            } else {
+                                // Load More Button simulating Infinite Scroll (Requirement 25)
+                                Button(
+                                    onClick = {
+                                        isAppendingNews = true
+                                        coroutineScope.launch {
+                                            delay(900)
+                                            newsItemsState.add(DzenItem("Сбербанк представил новые алгоритмы суверенного ИИ", "Сбер пресс-служба", "Свежее", 412))
+                                            newsItemsState.add(DzenItem("Росреестр перенес 100% данных граждан в защищённый суверенный контур", "ТАСС", "Свежее", 168))
+                                            isAppendingNews = false
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
+                                ) {
+                                    Text("Загрузить ещё статьи", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -758,7 +820,405 @@ fun NewTabPageView(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
-                Spacer(modifier = Modifier.height(40.dp))
+                Spacer(modifier = Modifier.height(60.dp))
+            }
+        }
+
+        // Back to top floating action button with animation (Requirement 30)
+        val showFab = scrollState.value > 400
+        AnimatedVisibility(
+            visible = showFab,
+            enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+            exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp)
+        ) {
+            FloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        scrollState.animateScrollTo(0, spring(stiffness = Spring.StiffnessLow))
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = Color.White,
+                shape = CircleShape,
+                modifier = Modifier.size(52.dp)
+            ) {
+                Icon(imageVector = Icons.Default.ArrowUpward, contentDescription = "Вверх", modifier = Modifier.size(24.dp))
+            }
+        }
+    }
+}
+
+// ---------------------- SUB-COMPOSABLES DEFINITIONS -------------------------
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun InteractiveTileCard(
+    tile: QuickServiceTile,
+    index: Int,
+    browserMode: Int,
+    onUrlSelected: (String) -> Unit,
+    onDelete: () -> Unit
+) {
+    var isPressed by remember { mutableStateOf(false) }
+    val cardScale by animateFloatAsState(
+        targetValue = if (isPressed) 0.95f else 1.0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "TileScale"
+    )
+    val cardElevation by animateDpAsState(
+        targetValue = if (isPressed) 12.dp else 4.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "TileElevation"
+    )
+
+    // Staggered presentation reveal (Requirement 17: delay 30ms between tiles)
+    val revealAlphaState = remember { Animatable(0f) }
+    val revealSlideState = remember { Animatable(24f) }
+    LaunchedEffect(Unit) {
+        delay(index * 30L)
+        launch { revealAlphaState.animateTo(1f, tween(250)) }
+        launch { revealSlideState.animateTo(0f, spring(stiffness = Spring.StiffnessLow)) }
+    }
+
+    // Shatter on delete animation states (Requirement 14)
+    var isShattered by remember { mutableStateOf(false) }
+    val shatterScale by animateFloatAsState(
+        targetValue = if (isShattered) 0f else 1f,
+        animationSpec = tween(300, easing = LinearOutSlowInEasing),
+        label = "ShatterScale"
+    )
+    val shatterRotation by animateFloatAsState(
+        targetValue = if (isShattered) 45f else 0f,
+        animationSpec = tween(300, easing = LinearOutSlowInEasing),
+        label = "ShatterRotation"
+    )
+
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
+
+    if (shatterScale > 0.01f) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .graphicsLayer {
+                    alpha = revealAlphaState.value * shatterScale
+                    scaleX = cardScale * shatterScale
+                    scaleY = cardScale * shatterScale
+                    translationY = revealSlideState.value
+                    rotationZ = shatterRotation
+                }
+                .pointerInput(tile.name) {
+                    detectTapGestures(
+                        onPress = {
+                            isPressed = true
+                            haptic.performHapticFeedback(androidx.compose.ui.platform.HapticFeedbackType.LongPress)
+                            tryAwaitRelease()
+                            isPressed = false
+                        },
+                        onTap = {
+                            haptic.performHapticFeedback(androidx.compose.ui.platform.HapticFeedbackType.LongPress)
+                            onUrlSelected(tile.url)
+                        }
+                    )
+                }
+                .padding(top = 4.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(72.dp) // Requirement 11: 72x72 dp size
+                    .drawBehind {
+                        // Requirement 15: Color halo from Palette API / brand color
+                        drawCircle(
+                            color = tile.brandColor.copy(alpha = 0.22f),
+                            radius = size.width * 0.58f,
+                            center = center
+                        )
+                    }
+                    .background(
+                        color = if (browserMode == 3) tile.brandColor.copy(alpha = 0.15f) else Color.White,
+                        shape = RoundedCornerShape(16.dp) // Requirement 11: 16dp radius
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = tile.brandColor.copy(alpha = 0.35f),
+                        shape = RoundedCornerShape(16.dp)
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                // Deletion trigger 'x' button (Requirement 14)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(16.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        .clickable {
+                            haptic.performHapticFeedback(androidx.compose.ui.platform.HapticFeedbackType.LongPress)
+                            isShattered = true
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                onDelete()
+                            }, 300)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Удалить",
+                        tint = Color.White,
+                        modifier = Modifier.size(10.dp)
+                    )
+                }
+
+                // In Kids Mode (3), replacing with animal beast icon replacements (Requirement 27)
+                val displayIcon = if (browserMode == 3) {
+                    when (index % 4) {
+                        0 -> Icons.Default.Pets
+                        1 -> Icons.Default.Face
+                        2 -> Icons.Default.Mood
+                        else -> Icons.Default.ChildCare
+                    }
+                } else {
+                    tile.icon
+                }
+
+                Icon(
+                    imageVector = displayIcon,
+                    contentDescription = tile.name,
+                    tint = tile.brandColor,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = tile.name,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+fun InteractivePlusTile(
+    onAdd: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "PlusPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1.0f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1250, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "PlusScale"
+    )
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = pulseScale
+                scaleY = pulseScale
+            }
+            .clickable { onAdd() }
+            .padding(top = 4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .background(Color.White.copy(alpha = 0.15f), RoundedCornerShape(16.dp))
+                .border(1.5.dp, Brush.linearGradient(listOf(Color(0xFF0039A6), Color(0xFFD52B1E))), RoundedCornerShape(16.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Добавить",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Добавить",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+fun AnimatedWeatherWidget(isDark: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "WeatherParticles")
+    val time by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "ParticleTime"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+        ),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxWidth().height(86.dp)) {
+            // Requirement 18: Falling raindrops / particles animated layout overlay
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+                for (i in 0..7) {
+                    val x = (w * (i * 0.13f + 0.05f)) % w
+                    val y = (h * (time + i * 0.21f)) % h
+                    drawLine(
+                        color = Color(0x660284C7),
+                        start = androidx.compose.ui.geometry.Offset(x, y),
+                        end = androidx.compose.ui.geometry.Offset(x - 2f, y + 10f),
+                        strokeWidth = 3f
+                    )
+                }
+            }
+
+            Column(modifier = Modifier.padding(12.dp)) {
+                Text("Погода • Москва", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(imageVector = Icons.Default.WbCloudy, contentDescription = "", tint = Color(0xFF0284C7), modifier = Modifier.size(24.dp))
+                    Text("+24°C", fontSize = 24.sp, fontWeight = FontWeight.Black) // Requirement 18: size 24sp
+                }
+                Text("Облачно, дождь", fontSize = 9.sp, color = Color.DarkGray)
+            }
+        }
+    }
+}
+
+@Composable
+fun AnimatedTrafficWidget(isDark: Boolean) {
+    val infiniteTransition = rememberInfiniteTransition(label = "TrafficPluse")
+    val scaleAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = LinearOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "TrafficGlow"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
+        ),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f)),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp).height(86.dp)) {
+            Text("Пробки • Москва", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(2.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Requirement 19: traffic light glowing circle transitions
+                Box(contentAlignment = Alignment.Center) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .graphicsLayer {
+                                scaleX = 1f + scaleAlpha * 0.4f
+                                scaleY = 1f + scaleAlpha * 0.4f
+                                alpha = 1f - scaleAlpha
+                            }
+                            .background(Color(0xFFFFC107), CircleShape)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(20.dp)
+                            .background(Color(0xFFFFB300), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(imageVector = Icons.Default.Traffic, contentDescription = "", tint = Color.White, modifier = Modifier.size(12.dp))
+                    }
+                }
+                Text("4 балла", fontSize = 20.sp, fontWeight = FontWeight.Black, color = Color(0xFFFFB300))
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text("Свободные дороги", fontSize = 9.sp, color = Color.Gray)
+        }
+    }
+}
+
+@Composable
+fun SkeletonNewsCard() {
+    val transition = rememberInfiniteTransition(label = "SkeletonShimmer")
+    val alphaShimmer by transition.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(850, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "SkeletonAlpha"
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (com.example.ui.theme.ThemeManager.LocalDarkTheme.current) Color(0xFF1E293B).copy(0.4f) else Color.White.copy(0.7f)
+        ),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)),
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(18.dp)
+                    .background(Color.Gray.copy(alpha = alphaShimmer), RoundedCornerShape(4.dp))
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.5f)
+                    .height(14.dp)
+                    .background(Color.Gray.copy(alpha = alphaShimmer), RoundedCornerShape(4.dp))
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(70.dp)
+                        .height(12.dp)
+                        .background(Color.Gray.copy(alpha = alphaShimmer), RoundedCornerShape(3.dp))
+                )
+                Box(
+                    modifier = Modifier
+                        .width(40.dp)
+                        .height(12.dp)
+                        .background(Color.Gray.copy(alpha = alphaShimmer), RoundedCornerShape(3.dp))
+                )
             }
         }
     }
@@ -908,11 +1368,39 @@ fun CurrencyItem(
     label: String,
     rate: String,
     change: String,
-    isUp: Boolean
+    isUp: Boolean,
+    sparkPoints: List<Float>
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
         Text(rate, fontSize = 14.sp, fontWeight = FontWeight.Black)
+        
+        // Requirement 20: 24h mini sparklines (Canvas programmatically drawing vector line currency graphs)
+        Box(
+            modifier = Modifier
+                .padding(vertical = 4.dp)
+                .width(60.dp)
+                .height(18.dp)
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val ptCount = sparkPoints.size
+                if (ptCount > 1) {
+                    val step = size.width / (ptCount - 1)
+                    val pth = Path()
+                    sparkPoints.forEachIndexed { idx, value ->
+                        val x = idx * step
+                        val y = size.height - (value * size.height * 0.75f + size.height * 0.1f)
+                        if (idx == 0) pth.moveTo(x, y) else pth.lineTo(x, y)
+                    }
+                    drawPath(
+                        path = pth,
+                        color = if (isUp) Color(0xFF3DDC84) else Color(0xFFD52B1E),
+                        style = Stroke(width = 4f)
+                    )
+                }
+            }
+        }
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 imageVector = if (isUp) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward,
@@ -944,4 +1432,3 @@ data class QuickServiceTile(
     val icon: ImageVector,
     val brandColor: Color
 )
-

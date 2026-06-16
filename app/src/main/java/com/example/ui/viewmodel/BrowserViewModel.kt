@@ -73,6 +73,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val isSafeBrowsingEnabled = MutableStateFlow(sharedPrefs.getBoolean("safe_browsing", true))
     val isAdBlockEnabled = MutableStateFlow(sharedPrefs.getBoolean("ad_block", true))
 
+    // GOST Encryption suites: 0 = ГОСТ Р 34.12-2015 "Кузнечик" (Kuznyechik), 1 = ГОСТ 28147-89, 2 = ГОСТ Р 34.10-2012 / ГОСТ Р 34.11-2012
+    val selectedGostCipherSuite = MutableStateFlow(sharedPrefs.getInt("gost_cipher_suite", 0))
+    // Strict trust store: true = only national Russian government certificates allowed, false = standard web trust with national certificates enabled
+    val useMintsifryCertsOnly = MutableStateFlow(sharedPrefs.getBoolean("mintsifry_certs_only", false))
+
     // Theme select: 0 = Системная, 1 = Светлая (по умолчанию), 2 = Тёмная
     val selectedThemeMode = MutableStateFlow(sharedPrefs.getInt("theme_mode", 1))
 
@@ -147,6 +152,28 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun toggleAdBlock(enabled: Boolean) {
         sharedPrefs.edit().putBoolean("ad_block", enabled).apply()
         isAdBlockEnabled.value = enabled
+    }
+
+    fun setGostCipherSuite(id: Int) {
+        sharedPrefs.edit().putInt("gost_cipher_suite", id).apply()
+        selectedGostCipherSuite.value = id
+        showLiveNotification(
+            title = "Конфигурация ГОСТ изменена",
+            message = "Выбран новый стандарт шифрования: " + when(id) {
+                0 -> "ГОСТ Р 34.12-2015 'Кузнечик'"
+                1 -> "ГОСТ 28147-89"
+                else -> "ГОСТ Р 34.10-2012 / 34.11-2012"
+            }
+        )
+    }
+
+    fun toggleMintsifryCertsOnly(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("mintsifry_certs_only", enabled).apply()
+        useMintsifryCertsOnly.value = enabled
+        showLiveNotification(
+            title = if (enabled) "Строгое доверие Минцифры" else "Гибридный режим доверия",
+            message = if (enabled) "Соединения разрешены ТОЛЬКО к отечественным узлам с ГОСТ-сертификацией." else "Разрешены все легитимные соединения с поддержкой национальных ГОСТ-сертификатов."
+        )
     }
 
     // Manual blocklist checking

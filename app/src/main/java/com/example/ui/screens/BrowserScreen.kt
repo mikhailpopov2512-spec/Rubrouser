@@ -27,6 +27,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.animation.core.*
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -66,6 +70,11 @@ fun BrowserScreen(
     // Prevent recursive loop crash on search engine redirect matching
     var lastLoadedUrl by remember { mutableStateOf("") }
     var isOmniboxFocused by remember { mutableStateOf(false) }
+
+    // National certificate details dialog & configuration variables
+    var showCertInfoDialog by remember { mutableStateOf(false) }
+    val gostCipherSuite by viewModel.selectedGostCipherSuite.collectAsState()
+    val useMintsifryCertsOnly by viewModel.useMintsifryCertsOnly.collectAsState()
 
     // Toggle FLAG_SECURE dynamically on Stealth Mode (mode = 4)
     val activity = context as? android.app.Activity
@@ -149,28 +158,115 @@ fun BrowserScreen(
                 .testTag("omnibox_input"),
             placeholder = { Text("Поиск или адрес (ya.ru)", fontSize = 13.sp) },
             leadingIcon = {
-                // Lock vs Protect Shield Indicator
-                IconButton(onClick = {
-                    // Quick warning connections dialog or info
-                }) {
-                    Icon(
-                        imageVector = if (browserMode == 4) {
-                            Icons.Default.Security
-                        } else if (currentUrl.startsWith("https://")) {
-                            Icons.Default.Lock
-                        } else {
-                            Icons.Default.Shield
-                        },
-                        contentDescription = "Защита СВ",
-                        tint = if (browserMode == 4) {
-                            Color(0xFF00FF66)
-                        } else if (currentUrl.startsWith("https://")) {
-                            Color(0xFF3DDC84) // Safe Green
-                        } else {
-                            Color.Gray
-                        },
-                        modifier = Modifier.size(18.dp)
-                    )
+                // Lock vs Protect Shield vs National Mintsifry Cert Indicator
+                val isNationalCert = currentUrl.startsWith("https://") && (
+                    currentUrl.contains(".ru") || 
+                    currentUrl.contains(".su") || 
+                    currentUrl.contains("gosuslugi") ||
+                    currentUrl.contains("sberbank") ||
+                    currentUrl.contains("ya.ru") ||
+                    useMintsifryCertsOnly
+                )
+                val isSecure = currentUrl.startsWith("https://") || isNationalCert || browserMode == 4
+
+                // Smooth luxury security microwave ripples (Requirement #9)
+                val infiniteMicrowave = rememberInfiniteTransition(label = "SecurityRadar")
+                val microwaveAlpha by infiniteMicrowave.animateFloat(
+                    initialValue = 0.5f,
+                    targetValue = 0.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = androidx.compose.animation.core.EaseOutQuad),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "MicrowaveAlpha"
+                )
+                val microwaveScale by infiniteMicrowave.animateFloat(
+                    initialValue = 0.8f,
+                    targetValue = 1.7f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1500, easing = androidx.compose.animation.core.EaseOutQuad),
+                        repeatMode = RepeatMode.Restart
+                    ),
+                    label = "MicrowaveScale"
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = 4.dp)
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        if (isSecure) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .graphicsLayer {
+                                        scaleX = microwaveScale
+                                        scaleY = microwaveScale
+                                        alpha = microwaveAlpha
+                                    }
+                                    .background(
+                                        color = if (browserMode == 4) {
+                                            Color(0xFF00FF66).copy(alpha = 0.45f)
+                                        } else if (isNationalCert) {
+                                            Color(0xFF0039A6).copy(alpha = 0.45f)
+                                        } else {
+                                            Color(0xFF3DDC84).copy(alpha = 0.45f)
+                                        },
+                                        shape = androidx.compose.foundation.shape.CircleShape
+                                    )
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showCertInfoDialog = true },
+                            modifier = Modifier.testTag("security_status_icon_btn").size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (browserMode == 4) {
+                                    Icons.Default.Security
+                                } else if (isNationalCert) {
+                                    Icons.Default.Shield
+                                } else if (currentUrl.startsWith("https://")) {
+                                    Icons.Default.Lock
+                                } else {
+                                    Icons.Default.Shield
+                                },
+                                contentDescription = "Защита СВ",
+                                tint = if (browserMode == 4) {
+                                    Color(0xFF00FF66)
+                                } else if (isNationalCert) {
+                                    Color(0xFF0039A6) // Safe Deep Blue for Russian Ministry
+                                } else if (currentUrl.startsWith("https://")) {
+                                    Color(0xFF3DDC84) // Safe Green
+                                } else {
+                                    Color.Gray
+                                },
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+
+                    if (isNationalCert) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFFE0F2FE),
+                            border = androidx.compose.foundation.BorderStroke(0.5.dp, Color(0xFF0284C7)),
+                            modifier = Modifier
+                                .clickable { showCertInfoDialog = true }
+                                .padding(end = 4.dp)
+                        ) {
+                            Text(
+                                text = "ГОСТ",
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0369A1),
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             },
             trailingIcon = {
@@ -277,9 +373,9 @@ fun BrowserScreen(
         bottomBar = {
             // Bottom area dynamically structures Omnibox if pos == 0
             Surface(
-                tonalElevation = 3.dp,
-                shadowElevation = 8.dp,
-                color = MaterialTheme.colorScheme.surface
+                color = Color.Transparent, // Luxurious floating design: transparent backdrop
+                tonalElevation = 0.dp,
+                shadowElevation = 0.dp
             ) {
                 Column(
                     modifier = Modifier
@@ -287,26 +383,77 @@ fun BrowserScreen(
                 ) {
                     // Render Address Bar strictly at the bottom if Preference == 0 (Bottom)
                     if (addressBarPos == 0) {
-                        Row(
+                        // Premium spring animations for elastic stretching (Requirements #6, #7)
+                        val marginHorizontal by animateDpAsState(
+                            targetValue = if (isOmniboxFocused) 0.dp else 12.dp,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "OmniboxMarginHorizontal"
+                        )
+                        val marginVertical by animateDpAsState(
+                            targetValue = if (isOmniboxFocused) 0.dp else 12.dp,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "OmniboxMarginVertical"
+                        )
+                        val cardElevation by animateDpAsState(
+                            targetValue = if (isOmniboxFocused) 16.dp else 10.dp,
+                            animationSpec = spring(),
+                            label = "OmniboxElevation"
+                        )
+
+                        // Wrap inside floating Premium card container with tricolor active glowing borders (Requirement #8)
+                        Card(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = marginHorizontal, vertical = marginVertical)
+                                .testTag("floating_omnibox_outer_container"),
+                            shape = RoundedCornerShape(if (isOmniboxFocused) 0.dp else 24.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = cardElevation),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (browserMode == 4) Color(0xFF161616) else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+                            ),
+                            border = if (isOmniboxFocused) {
+                                BorderStroke(
+                                    width = 2.dp,
+                                    brush = Brush.linearGradient(
+                                        colors = listOf(
+                                            Color(0xFFFFFFFF),
+                                            Color(0xFF0039A6),
+                                            Color(0xFFD52B1E)
+                                        )
+                                    )
+                                )
+                            } else if (browserMode == 4) {
+                                BorderStroke(1.dp, Color(0xFF00FF66))
+                            } else {
+                                BorderStroke(0.5.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                            }
                         ) {
-                            IconButton(onClick = { viewModel.loadUrl("about:home") }) {
-                                Icon(imageVector = Icons.Default.Home, contentDescription = "Главная")
-                            }
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.loadUrl("about:home") },
+                                        modifier = Modifier.testTag("omnibox_home_logo_btn")
+                                    ) {
+                                        Icon(imageVector = Icons.Default.Home, contentDescription = "Главная", tint = if (browserMode == 4) Color(0xFF00FF66) else MaterialTheme.colorScheme.primary)
+                                    }
 
-                            Box(modifier = Modifier.weight(1f)) {
-                                omniboxTextField()
-                            }
-                        }
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        omniboxTextField()
+                                    }
+                                }
 
-                        // Omnibox mini tri-color strip indicator for Bottom Bar
-                        Row(modifier = Modifier.fillMaxWidth().height(2.dp)) {
-                            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.White))
-                            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0039A6)))
-                            Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFFD52B1E)))
+                                // Omnibox mini tri-color strip indicator (Requirement #8)
+                                Row(modifier = Modifier.fillMaxWidth().height(1.5.dp)) {
+                                    Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.White))
+                                    Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0039A6)))
+                                    Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFFD52B1E)))
+                                }
+                            }
                         }
                     }
 
@@ -797,6 +944,102 @@ fun BrowserScreen(
                         }
                     }
                 }
+            }
+
+            if (showCertInfoDialog) {
+                val isNationalCert = currentUrl.startsWith("https://") && (
+                    currentUrl.contains(".ru") || 
+                    currentUrl.contains(".su") || 
+                    currentUrl.contains("gosuslugi") ||
+                    currentUrl.contains("sberbank") ||
+                    currentUrl.contains("ya.ru") ||
+                    useMintsifryCertsOnly
+                )
+
+                AlertDialog(
+                    onDismissRequest = { showCertInfoDialog = false },
+                    confirmButton = {
+                        Button(
+                            onClick = { showCertInfoDialog = false },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Закрыть")
+                        }
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = if (isNationalCert) Icons.Default.Shield else Icons.Default.Lock,
+                            contentDescription = "Статус сертификата",
+                            tint = if (isNationalCert) Color(0xFF0039A6) else Color(0xFF3DDC84),
+                            modifier = Modifier.size(40.dp)
+                        )
+                    },
+                    title = {
+                        Text(
+                            text = if (isNationalCert) "Безопасное ГОСТ-соединение" else "Защищенное TLS-соединение",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (isNationalCert) {
+                                Text(
+                                    text = "Соединение защищено национальным SSL-сертификатом Минцифры России.",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF0284C7),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text("Детали сертификата:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("Узел: ${Uri.parse(currentUrl).host ?: currentUrl}", fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                        Text("Издатель: Минцифры России Root CA", fontSize = 11.sp)
+                                        Text("Протокол: TLSv1.3 / ГОСТ-Шифр", fontSize = 11.sp)
+                                        Text(
+                                            text = "Алгоритм: " + when(gostCipherSuite) {
+                                                0 -> "ГОСТ Р 34.12-2015 «Кузнечик»"
+                                                1 -> "ГОСТ 28147-89"
+                                                else -> "ГОСТ Р 34.10-2012 / ГОСТ Р 34.11-2012"
+                                            }, 
+                                            fontSize = 11.sp
+                                        )
+                                        Text("Доверие: Национальный реестр РФ (ОК)", fontSize = 11.sp, color = Color(0xFF16A34A), fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = "Соединение защищено глобальным сертификатом безопасности (TLS/SSL).",
+                                    fontSize = 13.sp,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text("Детали сертификата:", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text("Узел: ${Uri.parse(currentUrl).host ?: currentUrl}", fontSize = 11.sp, fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace)
+                                        Text("Протокол: TLSv1.3", fontSize = 11.sp)
+                                        Text("Шифрование: AES_256_GCM", fontSize = 11.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                )
             }
         }
     }

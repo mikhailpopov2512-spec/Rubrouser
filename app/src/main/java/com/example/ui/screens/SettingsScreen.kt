@@ -42,6 +42,9 @@ fun SettingsScreen(
     val isSafeBrowsingEnabled by viewModel.isSafeBrowsingEnabled.collectAsState()
     val isAdBlockEnabled by viewModel.isAdBlockEnabled.collectAsState()
 
+    val gostCipherSuite by viewModel.selectedGostCipherSuite.collectAsState()
+    val useMintsifryCertsOnly by viewModel.useMintsifryCertsOnly.collectAsState()
+
     val lastRknUpdate by viewModel.lastRknUpdate.collectAsState()
     val isUpdatingRknList by viewModel.isUpdatingRknList.collectAsState()
     val blockedCount by viewModel.blockedAttemptsCount.collectAsState()
@@ -688,17 +691,88 @@ fun SettingsScreen(
                         }
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Браузер поддерживает шифрование ГОСТ 28147-89, ГОСТ Р 34.10-2012 и ГОСТ Р 34.11-2012 для безопасного подключения к государственным сервисам (СМЭВ, Госуслуги).",
+                            text = "Росбраузер поддерживает отечественные стандарты шифрования ГОСТ 28147-89, ГОСТ Р 34.10-2012 и ГОСТ Р 34.11-2012 для безопасного и доверенного доступа к государственным и финансовым сервисам РФ.",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                             lineHeight = 16.sp
                         )
 
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Interactivity: Encryption Algorithm Selector
+                        Text(
+                            text = "Используемый протокол шифрования ГОСТ:",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        val ciphersList = listOf(
+                            "ГОСТ Р 34.12-2015 «Кузнечик» (Высокий приоритет)",
+                            "ГОСТ 28147-89 (Совместимость)",
+                            "ГОСТ Р 34.10-2012 / 34.11-2012 (Классический)"
+                        )
+
+                        ciphersList.forEachIndexed { idx, title ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setGostCipherSuite(idx) }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = gostCipherSuite == idx,
+                                    onClick = { viewModel.setGostCipherSuite(idx) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = title,
+                                    fontSize = 13.sp,
+                                    fontWeight = if (gostCipherSuite == idx) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (gostCipherSuite == idx) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+
                         Spacer(modifier = Modifier.height(12.dp))
                         Divider()
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        Text("Доверенные корневые сертификаты РФ:", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                        // Interactivity: Exclusive Mintsifry domestic certification toggle
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Только отечественные сертификаты Минцифры",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Строго соединяться только с узлами, подписанными Национальным удостоверяющим центром РФ. Иные доверенные узлы будут заблокированы.",
+                                    fontSize = 11.sp,
+                                    color = Color.Gray,
+                                    lineHeight = 14.sp
+                                )
+                            }
+                            Switch(
+                                checked = useMintsifryCertsOnly,
+                                onCheckedChange = { viewModel.toggleMintsifryCertsOnly(it) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Divider()
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        Text("Доверенные корневые сертификаты РФ (Вшиты в Trust Store):", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Root certificate row 1

@@ -94,7 +94,7 @@ class RussianFlagBackground {
             // Shift the hologram sweep across the watermark area with time
             val shimmerOffset = cos(phase.toDouble()).toFloat() * (watermarkWidth * 0.5f)
             matrix.setTranslate(shimmerOffset, 0f)
-            matrix.postRotate(20f, width / 2f, height / 2f)
+            matrix.postRotate(45f, width / 2f, height / 2f)
 
             // Dynamic holographic rainbow specs
             val holoGradient = LinearGradient(
@@ -250,7 +250,7 @@ fun PremiumBackdrop(
         initialValue = 0f,
         targetValue = (2 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 3500, easing = LinearEasing),
+            animation = tween(durationMillis = 3000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "PhaseOscillator"
@@ -266,10 +266,20 @@ fun PremiumBackdrop(
         label = "DriftOscillator"
     )
 
+    var animateAlpha by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        animateAlpha = true
+    }
+    val startAlpha by animateFloatAsState(
+        targetValue = if (animateAlpha) 1.0f else 0.0f,
+        animationSpec = tween(durationMillis = 300, easing = LinearOutSlowInEasing),
+        label = "StartAlpha"
+    )
+
     val blurRadius = when (browserMode) {
         3 -> 24.dp // Kid mode colorful watercolor blended together
         4 -> 0.dp  // Stealth mode remains sharp digital
-        else -> 20.dp
+        else -> 25.dp // Requirement #2 calls for 25 dp blur radius
     }
 
     val blurModifier = if (!isWatermark && blurRadius > 0.dp && android.os.Build.VERSION.SDK_INT >= 31) {
@@ -279,7 +289,9 @@ fun PremiumBackdrop(
     }
 
     Box(
-        modifier = blurModifier.fillMaxSize()
+        modifier = blurModifier
+            .graphicsLayer { alpha = alphaVal * startAlpha }
+            .fillMaxSize()
     ) {
         ComposeCanvas(modifier = Modifier.fillMaxSize()) {
             val canvas = drawContext.canvas.nativeCanvas
@@ -445,9 +457,9 @@ fun PremiumBackdrop(
         if (!isWatermark) {
             if (browserMode != 1 && browserMode != 4 && browserMode != 3) {
                 val overlayColor = if (isDark) {
-                    Color(0x940B0B0E) // Luxurious deep dark blur underlay
+                    Color(0x99000000) // Requirement #2 calls for #99000000 (тёмная)
                 } else {
-                    Color(0xBCFFFFFF) // Bright glassy finish
+                    Color(0xBFFFFFFF) // Requirement #2 calls for #BFFFFFFF (светлая)
                 }
                 ComposeCanvas(modifier = Modifier.fillMaxSize()) {
                     drawRect(color = overlayColor)
