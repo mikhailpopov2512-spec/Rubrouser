@@ -22,6 +22,9 @@ interface BrowserDao {
     @Query("DELETE FROM bookmarks WHERE url = :url")
     suspend fun deleteBookmarkByUrl(url: String)
 
+    @Query("SELECT COUNT(*) FROM bookmarks")
+    suspend fun getBookmarksCount(): Int
+
 
     // Surfing History
     @Query("SELECT * FROM history_items ORDER BY timestamp DESC")

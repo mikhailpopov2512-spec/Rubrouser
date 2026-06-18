@@ -32,6 +32,22 @@ class BrowserRepository(private val browserDao: BrowserDao) {
         browserDao.deleteBookmarkByUrl(url)
     }
 
+    suspend fun getBookmarksCount(): Int = withContext(Dispatchers.IO) {
+        browserDao.getBookmarksCount()
+    }
+
+    suspend fun restoreDefaultBookmarks() = withContext(Dispatchers.IO) {
+        val defaults = listOf(
+            Bookmark(title = "Яндекс.Поиск", url = "https://ya.ru"),
+            Bookmark(title = "Госуслуги", url = "https://www.gosuslugi.ru"),
+            Bookmark(title = "ВКонтакте", url = "https://vk.com"),
+            Bookmark(title = "Rutube", url = "https://rutube.ru")
+        )
+        for (b in defaults) {
+            browserDao.insertBookmark(b)
+        }
+    }
+
     // History management
     suspend fun addHistoryItem(title: String, url: String) = withContext(Dispatchers.IO) {
         // Prevent empty names

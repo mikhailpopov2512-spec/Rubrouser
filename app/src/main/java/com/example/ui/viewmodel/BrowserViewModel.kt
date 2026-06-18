@@ -100,6 +100,20 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     init {
         // Log sync state on start
         updateSyncMessage()
+
+        // Asynchronously check and prepopulate database if empty, avoiding Room onCreate deadlocks
+        scope.launch {
+            try {
+                if (repository.getBlockedUrlsCount() == 0) {
+                    repository.restoreDefaultBlocklist()
+                }
+                if (repository.getBookmarksCount() == 0) {
+                    repository.restoreDefaultBookmarks()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserViewModel", "Error prepopulating Database", e)
+            }
+        }
     }
 
     // Theme and Bar Position setters
