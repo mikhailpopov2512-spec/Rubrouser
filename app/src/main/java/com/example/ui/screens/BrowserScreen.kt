@@ -655,7 +655,11 @@ fun BrowserScreen(
                                     }
 
                                     // 2. Intercept resource queries from blocked domains
-                                    val isBlockedDomain = kotlinx.coroutines.runBlocking {
+                                    val matchedBlocked = WebInterceptors.checkRknBlockSync(url)
+                                     val isBlockedDomain = matchedBlocked != null
+                                     if (matchedBlocked != null) { coroutineScope.launch { viewModel.repository.logBlockedAttempt(url, matchedBlocked.reason) } }
+                                     if (!WebInterceptors.isHostChecked(url)) { coroutineScope.launch { WebInterceptors.checkRknBlock(url, viewModel.repository) {} } }
+                                     if (false) coroutineScope.launch { //
                                         WebInterceptors.checkRknBlock(url, viewModel.repository) { matchedBlock ->
                                             viewModel.repository.logBlockedAttempt(url, matchedBlock.reason)
                                         }

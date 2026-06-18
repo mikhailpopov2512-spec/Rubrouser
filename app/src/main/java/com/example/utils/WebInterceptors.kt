@@ -70,6 +70,45 @@ object WebInterceptors {
     }
 
     /**
+     * Checks if a domain/url is blocked synchronously using preloaded in-memory cache.
+     * Absolutely non-blocking, safe to be called in shouldInterceptRequest callbacks.
+     */
+    fun checkRknBlockSync(urlStr: String): BlockedUrl? {
+        if (urlStr.startsWith("about:") || urlStr.startsWith("data:") || urlStr.contains("blocked_stub")) {
+            return null
+        }
+
+        val host = extractHost(urlStr)
+        if (host.isBlank()) return null
+
+        // 1. FAST MEMORY CHECK USING LRU CACHED SUBDOMAINS
+        val parents = getHostAndParents(host)
+        for (parent in parents) {
+            val cachedUrl = RknBlocklistManager.blockedInfoCache.get(parent)
+            if (cachedUrl != null) {
+                return cachedUrl
+            }
+        }
+
+        // 2. BACKUP LOCAL INTERCEPTOR CACHE LOOKUP
+        val cached = blockCache[host]
+        if (cached != null) {
+            return cached.matched
+        }
+
+        return null
+    }
+
+    /**
+     * Helper to verify if we have already evaluated/cached a host decision.
+     */
+    fun isHostChecked(urlStr: String): Boolean {
+        val host = extractHost(urlStr)
+        if (host.isBlank()) return true
+        return blockCache.containsKey(host)
+    }
+
+    /**
      * Checks if a domain/url is blocked.
      * Caches hits to prevent slow database lookups on every image/subresource.
      */
