@@ -101,11 +101,17 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val isUpdatingRknList = MutableStateFlow(false)
 
     init {
+        if (hasAcceptedTerms.value) {
+            initializeBrowserData()
+        }
+    }
+
+    fun initializeBrowserData() {
         // Log sync state on start
         updateSyncMessage()
 
-        // Asynchronously check and prepopulate database if empty, avoiding Room onCreate deadlocks
-        scope.launch {
+        // Asynchronously check and prepopulate database if empty on Dispatchers.IO, avoiding Room onCreate deadlocks
+        scope.launch(Dispatchers.IO) {
             try {
                 if (repository.getBlockedUrlsCount() == 0) {
                     repository.restoreDefaultBlocklist()
@@ -153,6 +159,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun acceptTerms() {
         sharedPrefs.edit().putBoolean("accepted_terms", true).apply()
         hasAcceptedTerms.value = true
+        initializeBrowserData()
     }
 
     // Settings actions
