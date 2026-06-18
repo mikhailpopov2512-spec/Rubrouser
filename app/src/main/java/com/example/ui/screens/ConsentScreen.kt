@@ -63,7 +63,7 @@ fun ConsentScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f, fill = false)
+                    .weight(1f)
                     .padding(vertical = 16.dp)
                     .testTag("consent_card"),
                 shape = RoundedCornerShape(24.dp),
@@ -74,6 +74,7 @@ fun ConsentScreen(
             ) {
                 Column(
                     modifier = Modifier
+                        .fillMaxSize()
                         .padding(24.dp)
                 ) {
                     // Header

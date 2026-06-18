@@ -29,23 +29,6 @@ class MainActivity : ComponentActivity() {
       android.util.Log.e("MainActivity", "FATAL CRASH on thread ${thread.name}", throwable)
       throwable.printStackTrace()
     }
-    if (BuildConfig.DEBUG) {
-      android.os.StrictMode.setThreadPolicy(
-        android.os.StrictMode.ThreadPolicy.Builder()
-          .detectDiskReads()
-          .detectDiskWrites()
-          .detectNetwork()
-          .penaltyLog()
-          .build()
-      )
-      android.os.StrictMode.setVmPolicy(
-        android.os.StrictMode.VmPolicy.Builder()
-          .detectLeakedSqlLiteObjects()
-          .detectLeakedClosableObjects()
-          .penaltyLog()
-          .build()
-      )
-    }
     try {
       super.onCreate(savedInstanceState)
       enableEdgeToEdge()
