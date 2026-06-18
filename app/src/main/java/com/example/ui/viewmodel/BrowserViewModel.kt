@@ -81,6 +81,9 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     // Theme select: 0 = Системная, 1 = Светлая (по умолчанию), 2 = Тёмная
     val selectedThemeMode = MutableStateFlow(sharedPrefs.getInt("theme_mode", 1))
 
+    // NTP Background Select: 0 = Летний пейзаж (По умолчанию), 1 = Российский флаг (Патриотический), 2 = Минималистичный (Чистый цвет)
+    val selectedNtpThemeBackground = MutableStateFlow(sharedPrefs.getInt("ntp_bg_theme", 0))
+
     // Address Bar Position: 0 = Снизу (по умолчанию), 1 = Сверху
     val selectedAddressBarPosition = MutableStateFlow(sharedPrefs.getInt("address_bar_pos", 0))
 
@@ -120,6 +123,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun setThemeMode(mode: Int) {
         sharedPrefs.edit().putInt("theme_mode", mode).apply()
         selectedThemeMode.value = mode
+    }
+
+    fun setNtpBackgroundTheme(theme: Int) {
+        sharedPrefs.edit().putInt("ntp_bg_theme", theme).apply()
+        selectedNtpThemeBackground.value = theme
     }
 
     fun setAddressBarPosition(pos: Int) {

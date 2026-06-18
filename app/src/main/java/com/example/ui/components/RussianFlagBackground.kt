@@ -683,7 +683,8 @@ fun PremiumBackdrop(
     modifier: Modifier = Modifier,
     browserMode: Int = 0,
     isWatermark: Boolean = false,
-    alphaVal: Float = 1.0f
+    alphaVal: Float = 1.0f,
+    selectedBgTheme: Int = 0
 ) {
     val isDark = ThemeManager.LocalDarkTheme.current
     val flagPainter = remember { RussianFlagBackground() }
@@ -861,8 +862,18 @@ fun PremiumBackdrop(
                                 canvas.drawPath(flagPainter.audioPath, flagPainter.sonarRadar)
                             }
                         }
-                        else -> { // STANDARD/GUEST MODE: Summer landscape
-                            flagPainter.drawSummerBackground(canvas, width, height, isDark, phase = phase, drift = drift)
+                        else -> { // STANDARD/GUEST MODE: Summer landscape, Russian flag or minimal
+                            when (selectedBgTheme) {
+                                1 -> { // Russian flag
+                                    flagPainter.draw(canvas, width, height, isDark, isWatermark = false, alphaVal = alphaVal, phase = phase)
+                                }
+                                2 -> { // Minimalist solid
+                                    canvas.drawColor(if (isDark) android.graphics.Color.rgb(18, 18, 24) else android.graphics.Color.rgb(245, 246, 249))
+                                }
+                                else -> { // Summer landscape
+                                    flagPainter.drawSummerBackground(canvas, width, height, isDark, phase = phase, drift = drift)
+                                }
+                            }
                         }
                     }
                 }

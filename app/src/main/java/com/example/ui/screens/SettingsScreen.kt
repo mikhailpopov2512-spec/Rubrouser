@@ -153,6 +153,45 @@ fun SettingsScreen(
                     }
                 }
 
+                // NTP Background Card
+                val ntpBgTheme by viewModel.selectedNtpThemeBackground.collectAsState()
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Фон начальной страницы (Табло):", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            "Выберите фоновое оформление для новой вкладки Росбраузера.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        listOf(
+                            "Летний пейзаж (Облака, солнце, волны)",
+                            "Российский флаг (Патриотический)",
+                            "Минималистичный (Однотонный чистый фон)"
+                        ).forEachIndexed { index, name ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.setNtpBackgroundTheme(index) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = ntpBgTheme == index,
+                                    onClick = { viewModel.setNtpBackgroundTheme(index) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(name, fontSize = 14.sp)
+                            }
+                        }
+                    }
+                }
+
                 // Address Bar Position Card
                 val addressBarPos by viewModel.selectedAddressBarPosition.collectAsState()
                 Card(

@@ -55,6 +55,7 @@ fun NewTabPageView(
     // Observe state from ViewModel
     val searchEngine by viewModel.selectedSearchEngine.collectAsState()
     val browserMode by viewModel.currentBrowserMode.collectAsState() // 0=Std, 1=Incognito, 2=Guest, 3=Child, 4=Stealth
+    val selectedBgTheme by viewModel.selectedNtpThemeBackground.collectAsState()
     val isDark = com.example.ui.theme.ThemeManager.LocalDarkTheme.current
 
     // Banners alerts dismiss state
@@ -134,7 +135,8 @@ fun NewTabPageView(
     ) {
         // Render dynamic immersive background for each browser mode
         PremiumBackdrop(
-            browserMode = browserMode
+            browserMode = browserMode,
+            selectedBgTheme = selectedBgTheme
         )
 
         // Centered fixed holographic watermarked tricolor for Standard, Guest, and Child modes
@@ -142,7 +144,8 @@ fun NewTabPageView(
             PremiumBackdrop(
                 browserMode = browserMode,
                 isWatermark = true,
-                alphaVal = 0.12f
+                alphaVal = 0.12f,
+                selectedBgTheme = selectedBgTheme
             )
         }
 
