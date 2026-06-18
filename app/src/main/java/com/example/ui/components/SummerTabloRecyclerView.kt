@@ -31,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.recyclerview.widget.DefaultItemAnimator
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.RecyclerView
@@ -243,8 +244,28 @@ class SummerTabloAdapter(
     private var draggingPos = -1
 
     fun updateData(newTilesList: List<QuickServiceTile>) {
+        val oldList = ArrayList(this.tilesList)
+        val diffCallback = object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = oldList.size + 1
+            override fun getNewListSize(): Int = newTilesList.size + 1
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                if (oldItemPosition == oldList.size && newItemPosition == newTilesList.size) return true
+                if (oldItemPosition == oldList.size || newItemPosition == newTilesList.size) return false
+                return oldList[oldItemPosition].url == newTilesList[newItemPosition].url
+            }
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                if (oldItemPosition == oldList.size && newItemPosition == newTilesList.size) return true
+                if (oldItemPosition == oldList.size || newItemPosition == newTilesList.size) return false
+                val oldItem = oldList[oldItemPosition]
+                val newItem = newTilesList[newItemPosition]
+                return oldItem.name == newItem.name && oldItem.brandColor == newItem.brandColor
+            }
+        }
+        val diffResult = DiffUtil.calculateDiff(diffCallback)
         this.tilesList = ArrayList(newTilesList)
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 
     fun setDraggingPosition(pos: Int) {

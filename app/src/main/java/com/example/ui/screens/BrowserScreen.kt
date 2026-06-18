@@ -526,6 +526,12 @@ fun BrowserScreen(
                 .padding(innerPadding)
                 .fillMaxSize()
         ) {
+            val hasNavigated = currentUrl != "about:home"
+            var webViewCreated by remember { mutableStateOf(false) }
+            if (hasNavigated) {
+                webViewCreated = true
+            }
+
             if (currentUrl == "about:home") {
                 // Render the elegant Custom New Tab Page (NTP)
                 NewTabPageView(
@@ -534,7 +540,9 @@ fun BrowserScreen(
                         viewModel.loadUrl(url)
                     }
                 )
-            } else {
+            }
+
+            if (webViewCreated) {
                 // Render the Customized Intercepting Web Engine
                 AndroidView(
                     factory = { ctx ->
@@ -612,6 +620,11 @@ fun BrowserScreen(
                                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                                     val url = request?.url?.toString() ?: return false
                                     
+                                    if (url == "chrome-native://blocked" || url == "chrome://blocked") {
+                                        view?.loadUrl("file:///android_asset/blocked.html")
+                                        return true
+                                    }
+                                    
                                     if (url.startsWith("market://") || url.startsWith("rustore://") || url.startsWith("intent://")) {
                                         try {
                                             val marketUri = Uri.parse(url)
@@ -682,7 +695,11 @@ fun BrowserScreen(
                     update = { view ->
                         webViewRef = view
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize().graphicsLayer {
+                        val isHome = currentUrl == "about:home"
+                        alpha = if (isHome) 0f else 1f
+                        translationX = if (isHome) 9999f else 0f
+                    }
                 )
             }
 

@@ -264,32 +264,31 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        // Query local history and bookmarks immediately in background IO dispatcher
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                // Ensure thread-safe db access
-                val historyList = repository.allHistory.firstOrNull() ?: emptyList()
-                val matchedHistory = historyList.filter {
-                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
-                }.take(3)
-
-                val bookmarkList = repository.allBookmarks.firstOrNull() ?: emptyList()
-                val matchedBookmarks = bookmarkList.filter {
-                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
-                }.take(3)
-                
-                withContext(Dispatchers.Main) {
-                    localHistorySuggestions.value = matchedHistory
-                    localBookmarkSuggestions.value = matchedBookmarks
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("BrowserViewModel", "Error fetching local suggestions safely", e)
-            }
-        }
-
-        // Fetch Yandex remote search suggestions with a debounce of 200ms
+        // Fetch local and remote suggestions with a solid 300ms debounce (Req 3)
         searchSuggestJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(200)
+            kotlinx.coroutines.delay(300)
+            
+            withContext(Dispatchers.IO) {
+                try {
+                    val historyList = repository.allHistory.firstOrNull() ?: emptyList()
+                    val matchedHistory = historyList.filter {
+                        it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
+                    }.take(3)
+
+                    val bookmarkList = repository.allBookmarks.firstOrNull() ?: emptyList()
+                    val matchedBookmarks = bookmarkList.filter {
+                        it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
+                    }.take(3)
+                    
+                    withContext(Dispatchers.Main) {
+                        localHistorySuggestions.value = matchedHistory
+                        localBookmarkSuggestions.value = matchedBookmarks
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("BrowserViewModel", "Error fetching local suggestions safely", e)
+                }
+            }
+            
             fetchSuggestions(query)
         }
     }
@@ -362,6 +361,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun loadUrl(url: String) {
         var cleanUrl = url.trim()
         if (cleanUrl.isBlank()) return
+
+        if (cleanUrl == "chrome-native://blocked" || cleanUrl == "chrome://blocked") {
+            currentUrl.value = "file:///android_asset/blocked.html"
+            pageTitle.value = "Ресурс заблокирован"
+            return
+        }
 
         if (cleanUrl == "about:home") {
             currentUrl.value = "about:home"
