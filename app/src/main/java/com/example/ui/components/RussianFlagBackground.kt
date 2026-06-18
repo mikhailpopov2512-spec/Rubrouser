@@ -215,24 +215,49 @@ class RussianFlagBackground {
                 style = Paint.Style.FILL
                 isAntiAlias = true
             }
-            val glossMatrix = Matrix()
-            val specularOffset = cos(phase.toDouble()).toFloat() * (width * 0.16f)
-            glossMatrix.setTranslate(specularOffset, 0f)
 
-            val sheenGradient = LinearGradient(
+            // Layer 1: Global deep creases (primary wind wave folds) skewed diagonally
+            val glossMatrix1 = Matrix()
+            val specularOffset1 = sin(phase.toDouble()).toFloat() * (width * 0.18f)
+            glossMatrix1.setTranslate(specularOffset1, 0f)
+            glossMatrix1.postSkew(-0.16f, 0f) // Wind-swept diagonal folds
+
+            val sheenGradient1 = LinearGradient(
                 drawLeft, drawTop, drawRight, drawBottom,
                 intArrayOf(
-                    android.graphics.Color.argb(if (isDarkTheme) 15 else 25, 255, 255, 255), // folds peak reflection
-                    android.graphics.Color.argb(if (isDarkTheme) 65 else 40, 0, 0, 0),       // shadow crease
-                    android.graphics.Color.argb(if (isDarkTheme) 10 else 15, 255, 255, 255), // light glint
-                    android.graphics.Color.argb(if (isDarkTheme) 60 else 35, 0, 0, 0),       // deep wave shadows
-                    android.graphics.Color.argb(if (isDarkTheme) 15 else 25, 255, 255, 255)
+                    android.graphics.Color.argb(if (isDarkTheme) 12 else 20, 255, 255, 255), // folds peak reflection
+                    android.graphics.Color.argb(if (isDarkTheme) 55 else 36, 0, 0, 0),       // shadow crease
+                    android.graphics.Color.argb(if (isDarkTheme) 8 else 12, 255, 255, 255),  // minor peak reflection
+                    android.graphics.Color.argb(if (isDarkTheme) 50 else 32, 0, 0, 0),       // deep shadow crease
+                    android.graphics.Color.argb(if (isDarkTheme) 12 else 20, 255, 255, 255)
                 ),
                 floatArrayOf(0.0f, 0.25f, 0.5f, 0.75f, 1.0f),
                 Shader.TileMode.MIRROR
             )
-            sheenGradient.setLocalMatrix(glossMatrix)
-            glossPaint.shader = sheenGradient
+            sheenGradient1.setLocalMatrix(glossMatrix1)
+            glossPaint.shader = sheenGradient1
+            canvas.drawRect(RectF(drawLeft, drawTop - 80f, drawRight, drawBottom + 80f), glossPaint)
+
+            // Layer 2: Secondary micro-crease luxury ripples (fluttering wind micro-vibrations)
+            val glossMatrix2 = Matrix()
+            val specularOffset2 = cos(phase.toDouble() * 2.4).toFloat() * (width * 0.12f)
+            glossMatrix2.setTranslate(specularOffset2, 0f)
+            glossMatrix2.postSkew(0.08f, 0f) // Counter wind turbulence vortex shear
+
+            val sheenGradient2 = LinearGradient(
+                drawLeft, drawTop, drawRight, drawBottom,
+                intArrayOf(
+                    android.graphics.Color.argb(if (isDarkTheme) 8 else 12, 255, 255, 255), // gentle soft glint
+                    android.graphics.Color.argb(if (isDarkTheme) 35 else 22, 0, 0, 0),      // soft crevice crease
+                    android.graphics.Color.argb(if (isDarkTheme) 4 else 6, 255, 255, 255),   // specular micro-glint
+                    android.graphics.Color.argb(if (isDarkTheme) 30 else 18, 0, 0, 0),      // soft crevice crease
+                    android.graphics.Color.argb(if (isDarkTheme) 8 else 12, 255, 255, 255)
+                ),
+                floatArrayOf(0.0f, 0.15f, 0.5f, 0.85f, 1.0f),
+                Shader.TileMode.MIRROR
+            )
+            sheenGradient2.setLocalMatrix(glossMatrix2)
+            glossPaint.shader = sheenGradient2
             canvas.drawRect(RectF(drawLeft, drawTop - 80f, drawRight, drawBottom + 80f), glossPaint)
         }
     }
