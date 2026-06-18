@@ -1,13 +1,15 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.Image
+import android.app.Activity
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -16,25 +18,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.PremiumBackdrop
 
 @Composable
 fun ConsentScreen(
     modifier: Modifier = Modifier,
     onAccept: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .testTag("consent_screen")
     ) {
-        // Full Russian Flag backdrop with blur-layer
-        PremiumBackdrop()
+        // Static patriotic elegant background instead of heavy procedural CPU-blocking animations
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color(0xFF0C2340), // Premium Dark Nave Blue
+                            Color(0xFF1D3557)
+                        )
+                    )
+                )
+        )
 
         Column(
             modifier = Modifier
@@ -150,11 +165,13 @@ fun ConsentScreen(
                         }
                     }
 
-                    var isChecked by remember { mutableStateOf(false) }
+                    // Default checked to avoid user search/click difficulty on smaller screen sizes
+                    var isChecked by remember { mutableStateOf(true) }
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clickable { isChecked = !isChecked }
                             .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -190,6 +207,38 @@ fun ConsentScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
                             color = Color.White
+                        )
+                    }
+
+                    // Decline button (Requirement 3: Exit app if declined)
+                    Button(
+                        onClick = {
+                            Toast.makeText(
+                                context,
+                                "Использование браузера невозможно без согласия со всеми условиями согласно законодательству РФ.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            (context as? Activity)?.finish() ?: kotlin.system.exitProcess(0)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .height(44.dp)
+                            .testTag("decline_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                        )
+                    ) {
+                        Text(
+                            text = "Отклонить и Выйти",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
                         )
                     }
                 }
