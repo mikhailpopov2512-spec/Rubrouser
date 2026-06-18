@@ -35,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.PremiumBackdrop
+import com.example.ui.components.SummerTabloRecyclerView
 import com.example.ui.viewmodel.BrowserViewModel
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -506,48 +507,37 @@ fun NewTabPageView(
                         modifier = Modifier.align(Alignment.Start).padding(start = 6.dp, bottom = 10.dp)
                     )
 
-                    // LazyVerticalGrid inside Column with fixed height to prevent nesting scroll issues
-                    val gridHeight = if (tilesState.size > 3) 180.dp else 95.dp
-                    Box(modifier = Modifier.fillMaxWidth().height(gridHeight)) {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(4),
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            userScrollEnabled = false
-                        ) {
-                            itemsIndexed(tilesState) { index, tile ->
-                                InteractiveTileCard(
-                                    tile = tile,
-                                    index = index,
-                                    browserMode = browserMode,
-                                    onUrlSelected = { url -> onUrlSelected(url) },
-                                    onDelete = {
-                                        if (tilesState.size > index) {
-                                            tilesState.removeAt(index)
-                                        }
-                                    }
+                    // Dynamic RecyclerView-based ТАБЛО (Requirement 61-95) with Summer pebble beach design
+                    Box(modifier = Modifier.fillMaxWidth().wrapContentHeight()) {
+                        SummerTabloRecyclerView(
+                            tilesList = tilesState,
+                            isKidsMode = (browserMode == 3),
+                            onAddClicked = {
+                                val extraSites = listOf(
+                                    QuickServiceTile("Habr", "https://habr.com", Icons.Default.Article, Color(0xFF7FA2B2)),
+                                    QuickServiceTile("Sber", "https://sberbank.ru", Icons.Default.Savings, Color(0xFF21A038)),
+                                    QuickServiceTile("Mail.ru", "https://mail.ru", Icons.Default.Email, Color(0xFF1357C6)),
+                                    QuickServiceTile("РТ Новости", "https://rt.com", Icons.Default.Feed, Color(0xFFD32F2F))
                                 )
-                            }
-                            
-                            // Pulse glowing additive "+" tile (Requirement 16)
-                            item {
-                                InteractivePlusTile(
-                                    onAdd = {
-                                        val extraSites = listOf(
-                                            QuickServiceTile("Habr", "https://habr.com", Icons.Default.Article, Color(0xFF7FA2B2)),
-                                            QuickServiceTile("Sber", "https://sberbank.ru", Icons.Default.Savings, Color(0xFF21A038)),
-                                            QuickServiceTile("Mail.ru", "https://mail.ru", Icons.Default.Email, Color(0xFF1357C6)),
-                                            QuickServiceTile("РТ Новости", "https://rt.com", Icons.Default.Feed, Color(0xFFD32F2F))
-                                        )
-                                        val unadded = extraSites.filter { ex -> !tilesState.any { t -> t.name == ex.name } }
-                                        if (unadded.isNotEmpty()) {
-                                            tilesState.add(unadded.first())
-                                        }
-                                    }
-                                )
-                            }
-                        }
+                                val unadded = extraSites.filter { ex -> !tilesState.any { t -> t.name == ex.name } }
+                                if (unadded.isNotEmpty()) {
+                                    tilesState.add(unadded.first())
+                                }
+                            },
+                            onTileClicked = { tile ->
+                                onUrlSelected(tile.url)
+                            },
+                            onTileDeleted = { index ->
+                                if (tilesState.size > index) {
+                                    tilesState.removeAt(index)
+                                }
+                            },
+                            onItemsReordered = { reorderedList ->
+                                tilesState.clear()
+                                tilesState.addAll(reorderedList)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(20.dp))
