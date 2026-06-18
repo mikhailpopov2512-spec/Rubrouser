@@ -22,8 +22,14 @@ object RknBlocklistManager {
     val blockedInfoCache = LruCache<String, BlockedUrl>(2048)
 
     fun initialize(context: Context, repository: BrowserRepository) {
-        BlocklistUpdateWorker.schedule(context.applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
+            try {
+                Log.d(TAG, "Scheduling blocklist update task...")
+                BlocklistUpdateWorker.schedule(context.applicationContext)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to schedule blocklist updates", t)
+            }
+
             try {
                 Log.d(TAG, "Starting asynchronous blocklist preloading...")
                 repository.allBlockedUrls.collect { list ->
