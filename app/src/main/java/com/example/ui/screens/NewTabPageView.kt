@@ -1067,15 +1067,20 @@ fun AnimatedWeatherWidget(isDark: Boolean) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val w = size.width
                 val h = size.height
-                for (i in 0..7) {
-                    val x = (w * (i * 0.13f + 0.05f)) % w
-                    val y = (h * (time + i * 0.21f)) % h
-                    drawLine(
-                        color = Color(0x660284C7),
-                        start = androidx.compose.ui.geometry.Offset(x, y),
-                        end = androidx.compose.ui.geometry.Offset(x - 2f, y + 10f),
-                        strokeWidth = 3f
-                    )
+                if (w <= 1f || h <= 1f) return@Canvas
+                try {
+                    for (i in 0..7) {
+                        val x = (w * (i * 0.13f + 0.05f)) % w
+                        val y = (h * (time + i * 0.21f)) % h
+                        drawLine(
+                            color = Color(0x660284C7),
+                            start = androidx.compose.ui.geometry.Offset(x, y),
+                            end = androidx.compose.ui.geometry.Offset(x - 2f, y + 10f),
+                            strokeWidth = 3f
+                        )
+                    }
+                } catch (e: Throwable) {
+                    // Safe draw fallback
                 }
             }
 
@@ -1372,20 +1377,25 @@ fun CurrencyItem(
                 .height(18.dp)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val ptCount = sparkPoints.size
-                if (ptCount > 1) {
-                    val step = size.width / (ptCount - 1)
-                    val pth = Path()
-                    sparkPoints.forEachIndexed { idx, value ->
-                        val x = idx * step
-                        val y = size.height - (value * size.height * 0.75f + size.height * 0.1f)
-                        if (idx == 0) pth.moveTo(x, y) else pth.lineTo(x, y)
+                if (size.width <= 1f || size.height <= 1f) return@Canvas
+                try {
+                    val ptCount = sparkPoints.size
+                    if (ptCount > 1) {
+                        val step = size.width / (ptCount - 1)
+                        val pth = Path()
+                        sparkPoints.forEachIndexed { idx, value ->
+                            val x = idx * step
+                            val y = size.height - (value * size.height * 0.75f + size.height * 0.1f)
+                            if (idx == 0) pth.moveTo(x, y) else pth.lineTo(x, y)
+                        }
+                        drawPath(
+                            path = pth,
+                            color = if (isUp) Color(0xFF3DDC84) else Color(0xFFD52B1E),
+                            style = Stroke(width = 4f)
+                        )
                     }
-                    drawPath(
-                        path = pth,
-                        color = if (isUp) Color(0xFF3DDC84) else Color(0xFFD52B1E),
-                        style = Stroke(width = 4f)
-                    )
+                } catch (e: Throwable) {
+                    // Safe draw fallback
                 }
             }
         }

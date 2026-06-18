@@ -43,10 +43,12 @@ class RussianFlagBackground {
         alphaVal: Float = 1.0f,
         phase: Float = 0f
     ) {
-        val paint = Paint().apply {
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
+        if (canvas == null || width <= 1f || height <= 1f) return
+        try {
+            val paint = Paint().apply {
+                style = Paint.Style.FILL
+                isAntiAlias = true
+            }
 
         // Apply dark mode color filter if requested
         if (isDarkTheme) {
@@ -260,6 +262,9 @@ class RussianFlagBackground {
             glossPaint.shader = sheenGradient2
             canvas.drawRect(RectF(drawLeft, drawTop - 80f, drawRight, drawBottom + 80f), glossPaint)
         }
+        } catch (e: Throwable) {
+            android.util.Log.e("RussianFlag", "Error in draw", e)
+        }
     }
 
     /**
@@ -267,7 +272,9 @@ class RussianFlagBackground {
      * Blue (sky, pond), and Red (poppy flowers) tricolor colors (Req 1-57).
      */
     fun drawSummerBackground(canvas: Canvas, width: Float, height: Float, isDark: Boolean, phase: Float, drift: Float) {
-        val paint = Paint().apply { isAntiAlias = true }
+        if (canvas == null || width <= 1f || height <= 1f) return
+        try {
+            val paint = Paint().apply { isAntiAlias = true }
 
         // 1. SKY GRADIENT: Deep blue to light horizon blue (Req 1)
         val skyGrad = LinearGradient(
@@ -553,6 +560,9 @@ class RussianFlagBackground {
             val sizeP = 2.5f + 1.5f * sin(phase * 3f + s).toFloat()
             canvas.drawCircle(px, py, sizeP, sparklePaint)
         }
+        } catch (e: Throwable) {
+            android.util.Log.e("RussianFlag", "Error in drawSummerBackground", e)
+        }
     }
 
     private fun drawFlutteringButterfly(canvas: Canvas, cx: Float, cy: Float, wingColor: Int, phase: Float, paint: Paint) {
@@ -647,10 +657,12 @@ fun PremiumBackdrop(
     ) {
         ComposeCanvas(modifier = Modifier.fillMaxSize()) {
             val canvas = drawContext.canvas.nativeCanvas
+            if (canvas == null) return@ComposeCanvas
             val width = size.width
             val height = size.height
-
-            if (isWatermark) {
+            if (width <= 1f || height <= 1f) return@ComposeCanvas
+            try {
+                if (isWatermark) {
                 // Centered silver holographic signets
                 flagPainter.draw(canvas, width, height, isDark, isWatermark = true, alphaVal = alphaVal, phase = phase)
             } else {
@@ -802,6 +814,9 @@ fun PremiumBackdrop(
                         flagPainter.drawSummerBackground(canvas, width, height, isDark, phase = phase, drift = drift)
                     }
                 }
+            }
+            } catch (t: Throwable) {
+                android.util.Log.e("PremiumBackdrop", "Draw error inside ComposeCanvas", t)
             }
         }
 
