@@ -907,8 +907,8 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             YandexSwitchRow(
-                                title = "Проверять через cheburcheck.ru",
-                                description = "Проверяет сайты по распределенной суверенной базе блокировок перед открытием",
+                                title = "Использовать DNS-проверку",
+                                description = "Сверяет домены через российский DNS-сервер и локальную базу на предмет блокировки (Закон 149-ФЗ)",
                                 checked = isCheburcheckEnabled,
                                 onCheckedChange = { viewModel.toggleCheburcheck(it) },
                                 activeColor = accentColor

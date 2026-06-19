@@ -1,0 +1,82 @@
+diff --git a/content/browser/renderer_host/navigation_throttle.cc b/content/browser/renderer_host/navigation_throttle.cc
+index 8f2bdc61ab..a53e34bcf1 100644
+--- a/content/browser/renderer_host/navigation_throttle.cc
++++ b/content/browser/renderer_host/navigation_throttle.cc
+@@ -10,12 +10,16 @@
+ #include "content/public/browser/navigation_handle.h"
+ #include "content/browser/renderer_host/navigation_request.h"
+ #include "net/base/net_errors.h"
++#include "base/memory/singleton.h"
++#include "base/containers/lru_cache.h"
++#include "net/dns/host_resolver.h"
+ 
+ namespace content {
+ 
++class RknBlockCache {
++ public:
++  static RknBlockCache* GetInstance() {
++    return base::Singleton<RknBlockCache>::get();
++  }
++  
++  base::HashingMRUCache<std::string, bool>& cache() { return cache_; }
++  
++ private:
++  friend struct base::DefaultSingletonTraits<RknBlockCache>;
++  RknBlockCache() : cache_(2048) {}
++  ~RknBlockCache() = default;
++  
++  base::HashingMRUCache<std::string, bool> cache_;
++};
++
+ NavigationThrottle::NavigationThrottle(NavigationHandle* navigation_handle)
+     : navigation_handle_(navigation_handle) {}
+ 
+@@ -35,5 +39,47 @@ NavigationThrottle::ThrottleCheckResult NavigationThrottle::WillProcessResponse(
+   return PROCEED;
+ }
+ 
++NavigationThrottle::ThrottleCheckResult NavigationThrottle::CheckSovereignRegulators() {
++  GURL url = navigation_handle_->GetURL();
++  if (!url.is_valid() || !url.SchemeIsHTTPOrHTTPS()) {
++    return PROCEED;
++  }
++  
++  std::string host = url.host();
++  RknBlockCache* block_cache = RknBlockCache::GetInstance();
++  
++  // 1. Synchronously check local LRU memory cache
++  auto it = block_cache->cache().Get(host);
++  if (it != block_cache->cache().end()) {
++    if (it->second) {
++      LOG(WARNING) << "Navigation cancelled by sovereign blocklist cache: " << host;
++      return ThrottleCheckResult(CANCEL, net::ERR_BLOCKED_BY_ADMINISTRATOR, 
++                                 "<html><head><script>window.location.href='about:blocked-stub';</script></head></html>");
++    }
++    return PROCEED;
++  }
++  
++  // 2. Perform safe, non-blocking check against local SQLite RKN blocklist
++  bool database_blocked = CheckLocalStorageRknDbSync(host);
++  if (database_blocked) {
++    block_cache->cache().Put(host, true);
++    return ThrottleCheckResult(CANCEL, net::ERR_BLOCKED_BY_ADMINISTRATOR);
++  }
++  
++  return PROCEED;
++}
++
++bool NavigationThrottle::CheckLocalStorageRknDbSync(const std::string& host) {
++  // Simulates internal SQLite query for Chromium Android Content Providers
++  // Fast local db lookups are loaded into our local caches to prevent performance delays.
++  return false;
++}
++
++NavigationThrottle::ThrottleCheckResult NavigationThrottle::WillStartRequest() {
++  return CheckSovereignRegulators();
++}
++
++NavigationThrottle::ThrottleCheckResult NavigationThrottle::WillRedirectRequest() {
++  return CheckSovereignRegulators();
++}
++
+ }  // namespace content

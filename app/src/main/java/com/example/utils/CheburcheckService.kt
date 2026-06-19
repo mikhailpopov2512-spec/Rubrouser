@@ -5,111 +5,206 @@ import android.util.LruCache
 import com.example.data.repository.BrowserRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import org.json.JSONObject
-import java.net.URLEncoder
-import java.util.concurrent.TimeUnit
+import java.io.ByteArrayOutputStream
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.InetAddress
+import java.net.URL
 
 object CheburcheckService {
     private const val TAG = "CheburcheckService"
 
-    // Cache entry representing status and timestamp
-    private data class CacheEntry(val isBlocked: Boolean, val timestamp: Long)
-
-    // LruCache storing check results, expires after 5 minutes (300000ms)
-    private val checkCache = LruCache<String, CacheEntry>(500)
+    // 5-minute memory cache mapping host to block status (expiration: 300000ms)
+    private val dnsBlockedCache = LruCache<String, Boolean>(2048)
+    private val cacheTimestamps = HashMap<String, Long>()
     private const val CACHE_DURATION_MS = 5 * 60 * 1000 // 5 minutes
 
-    // Specialized HTTP Client with a strict 3-second timeout
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
-        .writeTimeout(3, TimeUnit.SECONDS)
-        .build()
-
     /**
-     * Checks if a URL is blocked via cheburcheck.ru API.
-     * Uses LruCache for fast lookups.
-     * If the service is unreachable or timeouts, falls back to the embedded RKN list.
-     * Returns true if blocked, false if allowed.
+     * Checks if a URL is restricted using:
+     * 1) Fast memory LruCache (5 mins duration)
+     * 2) Asynchronous DNS check via dns.yandex.ru with 2-second timeout.
+     *    If the response contains 127.0.0.1 (or loopback/block sign), it is restricted.
+     * 3) Safe fallback to the SQLite local RKN table database.
      */
     suspend fun checkUrl(urlStr: String, repository: BrowserRepository): Boolean = withContext(Dispatchers.IO) {
         if (urlStr.isBlank() || urlStr.startsWith("about:") || urlStr.startsWith("data:") || urlStr.contains("blocked_stub")) {
             return@withContext false
         }
 
-        val cacheKey = WebInterceptors.extractHost(urlStr)
-        if (cacheKey.isBlank()) {
+        val host = try {
+            val cleanStr = if (!urlStr.startsWith("http://") && !urlStr.startsWith("https://")) {
+                "http://$urlStr"
+            } else {
+                urlStr
+            }
+            URL(cleanStr).host?.lowercase() ?: ""
+        } catch (e: Exception) {
+            urlStr.lowercase().trim()
+        }
+
+        if (host.isBlank()) {
             return@withContext false
         }
 
-        // 1. Check LruCache memory hit
-        val cached = checkCache.get(cacheKey)
-        if (cached != null) {
-            val age = System.currentTimeMillis() - cached.timestamp
-            if (age < CACHE_DURATION_MS) {
-                Log.d(TAG, "LruCache HIT for host '$cacheKey': blocked=${cached.isBlocked}")
-                return@withContext cached.isBlocked
-            } else {
-                Log.d(TAG, "LruCache EXPIRED for host '$cacheKey'")
-                checkCache.remove(cacheKey)
+        // 1. Sync check of LruCache for fast feedback
+        val cachedBlocked = dnsBlockedCache.get(host)
+        val timestamp = cacheTimestamps[host] ?: 0L
+        if (cachedBlocked != null && (System.currentTimeMillis() - timestamp) < CACHE_DURATION_MS) {
+            Log.d(TAG, "LruCache hit for: $host -> blocked: $cachedBlocked")
+            return@withContext cachedBlocked
+        }
+
+        // 2. Perform raw DNS check via dns.yandex.ru (77.88.8.8) with 2s timeout
+        var resolvedIps: List<String> = emptyList()
+        try {
+            resolvedIps = queryDnsYandex(host, timeoutMs = 2000)
+            Log.d(TAG, "dns.yandex.ru lookup for '$host' returned: $resolvedIps")
+        } catch (e: Exception) {
+            Log.e(TAG, "DNS query to dns.yandex.ru failed, falling back", e)
+        }
+
+        var isDnsBlocked = false
+        if (resolvedIps.isNotEmpty()) {
+            for (ip in resolvedIps) {
+                // If the local provider or dns.yandex.ru returns 127.0.0.1 or similar indicators
+                if (ip == "127.0.0.1" || ip.startsWith("127.0.0.")) {
+                    isDnsBlocked = true
+                    Log.w(TAG, "Domain $host detected as BLOCKED via DNS resolving to local redirect: $ip")
+                    break
+                }
             }
         }
 
-        // 2. Query cheburcheck.ru API asynchronously with 3s timeout
-        try {
-            val encodedUrl = URLEncoder.encode(urlStr, "UTF-8")
-            val requestUrl = "https://cheburcheck.ru/api/check?url=$encodedUrl"
-            
-            val request = Request.Builder()
-                .url(requestUrl)
-                .header("User-Agent", "RosBrowserProtect/1.0 (Android; Chromium Fork)")
-                .get()
-                .build()
+        // 3. Cache the DNS result if successful
+        if (resolvedIps.isNotEmpty() || isDnsBlocked) {
+            dnsBlockedCache.put(host, isDnsBlocked)
+            cacheTimestamps[host] = System.currentTimeMillis()
+            if (isDnsBlocked) {
+                return@withContext true
+            }
+        }
 
-            Log.d(TAG, "Querying cheburcheck API for URL: $urlStr")
-            httpClient.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val bodyString = response.body?.string()
-                    if (!bodyString.isNullOrBlank()) {
-                        val json = JSONObject(bodyString)
-                        val status = json.optString("status", "allowed")
-                        val isBlocked = status.equals("blocked", ignoreCase = true)
-                        
-                        Log.d(TAG, "API success for '$cacheKey': status='$status' (blocked=$isBlocked)")
-                        
-                        // Store in cache with current timestamp
-                        checkCache.put(cacheKey, CacheEntry(isBlocked, System.currentTimeMillis()))
-                        return@withContext isBlocked
+        // 4. FALLBACK: Query the SQLite Local Database (Prepopulated / RKN table list check)
+        Log.d(TAG, "Using internal SQLite list fallback check for host: $host")
+        val isLocalBlocked = repository.checkBlockedUrl(urlStr) != null || WebInterceptors.checkRknBlockSync(urlStr) != null
+        
+        // Populate cache for robustness
+        dnsBlockedCache.put(host, isLocalBlocked)
+        cacheTimestamps[host] = System.currentTimeMillis()
+
+        return@withContext isLocalBlocked
+    }
+
+    /**
+     * Helper to perform raw UDP DNS resolution directly to Yandex DNS (77.88.8.8)
+     */
+    private fun queryDnsYandex(domain: String, timeoutMs: Int): List<String> {
+        val ips = mutableListOf<String>()
+        var socket: DatagramSocket? = null
+        try {
+            socket = DatagramSocket()
+            socket.soTimeout = timeoutMs
+
+            val baos = ByteArrayOutputStream()
+            // Header
+            baos.write(byteArrayOf(0x12.toByte(), 0x34.toByte())) // Transaction ID
+            baos.write(byteArrayOf(0x01.toByte(), 0x00.toByte())) // Flags: Standard recursive query
+            baos.write(byteArrayOf(0x00.toByte(), 0x01.toByte())) // Questions: 1
+            baos.write(byteArrayOf(0x00.toByte(), 0x00.toByte())) // Answer RRs: 0
+            baos.write(byteArrayOf(0x00.toByte(), 0x00.toByte())) // Authority RRs: 0
+            baos.write(byteArrayOf(0x00.toByte(), 0x00.toByte())) // Additional RRs: 0
+
+            // Question: QNAME
+            val parts = domain.split(".")
+            for (part in parts) {
+                if (part.isEmpty()) continue
+                val bytes = part.toByteArray(Charsets.US_ASCII)
+                baos.write(bytes.size)
+                baos.write(bytes)
+            }
+            baos.write(0) // Zero length octet terminator
+
+            // QTYPE: A (0x0001)
+            baos.write(byteArrayOf(0x00.toByte(), 0x01.toByte()))
+            // QCLASS: IN (0x0001)
+            baos.write(byteArrayOf(0x00.toByte(), 0x01.toByte()))
+
+            val queryData = baos.toByteArray()
+            val yandexDnsIp = InetAddress.getByName("77.88.8.8") // dns.yandex.ru
+            val packet = DatagramPacket(queryData, queryData.size, yandexDnsIp, 53)
+            socket.send(packet)
+
+            val buffer = ByteArray(1024)
+            val responsePacket = DatagramPacket(buffer, buffer.size)
+            socket.receive(responsePacket)
+
+            val responseData = responsePacket.data
+            val responseLen = responsePacket.length
+
+            if (responseLen > 12) {
+                // Confirm matching Transaction ID
+                if (responseData[0] == 0x12.toByte() && responseData[1] == 0x34.toByte()) {
+                    val questions = ((responseData[4].toInt() and 0xFF) shl 8) or (responseData[5].toInt() and 0xFF)
+                    val answers = ((responseData[6].toInt() and 0xFF) shl 8) or (responseData[7].toInt() and 0xFF)
+
+                    var ptr = 12
+                    // Skip Questions segment
+                    for (q in 0 until questions) {
+                        while (ptr < responseLen && responseData[ptr] != 0.toByte()) {
+                            ptr += (responseData[ptr].toInt() and 0xFF) + 1
+                        }
+                        ptr += 5 // Skip zero byte, QTYPE (2b) and QCLASS (2b)
                     }
-                } else {
-                    Log.w(TAG, "API returned unsuccessful code: ${response.code}")
+
+                    // Parse Answer segment
+                    for (a in 0 until answers) {
+                        if (ptr + 12 > responseLen) break
+
+                        // Skip NAME identifier (could be compression byte ptr)
+                        if ((responseData[ptr].toInt() and 0xC0) == 0xC0) {
+                            ptr += 2
+                        } else {
+                            while (ptr < responseLen && responseData[ptr] != 0.toByte()) {
+                                ptr += (responseData[ptr].toInt() and 0xFF) + 1
+                            }
+                            ptr += 1
+                        }
+
+                        if (ptr + 10 > responseLen) break
+                        val type = ((responseData[ptr].toInt() and 0xFF) shl 8) or (responseData[ptr + 1].toInt() and 0xFF)
+                        val rclass = ((responseData[ptr + 2].toInt() and 0xFF) shl 8) or (responseData[ptr + 3].toInt() and 0xFF)
+                        val rdLength = ((responseData[ptr + 8].toInt() and 0xFF) shl 8) or (responseData[ptr + 9].toInt() and 0xFF)
+                        ptr += 10
+
+                        if (type == 1 && rclass == 1 && rdLength == 4) { // TYPE A, Class IN, IPv4 length 4
+                            if (ptr + 4 <= responseLen) {
+                                val ip = "${responseData[ptr].toInt() and 0xFF}.${responseData[ptr + 1].toInt() and 0xFF}.${responseData[ptr + 2].toInt() and 0xFF}.${responseData[ptr + 3].toInt() and 0xFF}"
+                                ips.add(ip)
+                            }
+                        }
+                        ptr += rdLength
+                    }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Cheburcheck query failed: ${e.message}. Falling back to internal RKN blocklist.", e)
+            Log.e(TAG, "queryDnsYandex socket query error: ${e.message}")
+        } finally {
+            socket?.close()
         }
-
-        // 3. FALLBACK: Internal database / RKN block list matching
-        Log.d(TAG, "Using internal RKN list fallback check for URL: $urlStr")
-        val rknBlocked = WebInterceptors.checkRknBlockSync(urlStr) != null
-                || repository.checkBlockedUrl(urlStr) != null
-
-        // Cache the fallback result for safety as well to prevent aggressive network polling
-        checkCache.put(cacheKey, CacheEntry(rknBlocked, System.currentTimeMillis()))
-        return@withContext rknBlocked
+        return ips
     }
 
     /**
-     * Clears local Cheburcheck cache entries.
+     * Clears DNS caching entries
      */
     fun clearCache() {
-        checkCache.evictAll()
+        dnsBlockedCache.evictAll()
+        cacheTimestamps.clear()
     }
 
     /**
-     * Renders a pristine, modern offline HTML blocked page in beautiful summer design.
+     * Renders a pristine visual summer themed lock page with a darkened tricolor flag,
+     * beautiful floral ambient accents, a "Назад" button, and a prominent legislative 149-ФЗ Law link.
      */
     fun generateBlockedPageHtml(url: String): String {
         return """
@@ -118,12 +213,12 @@ object CheburcheckService {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Доступ заблокирован • RosBrowser</title>
+                <title>Доступ ограничен • Нарушение 149-ФЗ</title>
                 <style>
                     body {
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                        background: radial-gradient(circle at center, #111827 0%, #030712 100%);
-                        color: #f3f4f6;
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+                        background: radial-gradient(circle at center, #0B0F19 0%, #03050C 100%);
+                        color: #E2E8F0;
                         margin: 0;
                         padding: 0;
                         display: flex;
@@ -131,207 +226,225 @@ object CheburcheckService {
                         justify-content: center;
                         min-height: 100vh;
                         position: relative;
-                        overflow-x: hidden;
+                        overflow: hidden;
                     }
-                    /* Subtle Summer Organic elements in backdrop */
-                    .summer-glow {
+                    /* Beautiful natural summer vibes decorative glowing overlay */
+                    .sun-glow {
                         position: absolute;
-                        width: 300px;
-                        height: 300px;
-                        background: radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, rgba(0, 0, 0, 0) 70%);
-                        top: 10%;
-                        left: 5%;
+                        width: 50vw;
+                        height: 50vw;
+                        background: radial-gradient(circle, rgba(16, 185, 129, 0.04) 0%, rgba(245, 158, 11, 0.02) 50%, rgba(0, 0, 0, 0) 100%);
+                        top: -10%;
+                        right: -10%;
                         z-index: 1;
+                        pointer-events: none;
                     }
-                    .summer-glow-warm {
+                    .meadow-glow {
                         position: absolute;
-                        width: 400px;
-                        height: 400px;
-                        background: radial-gradient(circle, rgba(245, 158, 11, 0.05) 0%, rgba(0, 0, 0, 0) 70%);
-                        bottom: 10%;
-                        right: 5%;
+                        width: 60vw;
+                        height: 60vw;
+                        background: radial-gradient(circle, rgba(34, 197, 94, 0.03) 0%, rgba(0, 0, 0, 0) 70%);
+                        bottom: -20%;
+                        left: -20%;
                         z-index: 1;
+                        pointer-events: none;
                     }
-                    .container {
-                        max-width: 500px;
-                        width: 88%;
-                        padding: 35px 25px;
-                        background: rgba(17, 24, 39, 0.85);
-                        border-radius: 20px;
-                        border: 1px solid rgba(255, 255, 255, 0.08);
-                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
-                        backdrop-filter: blur(20px);
-                        -webkit-backdrop-filter: blur(20px);
+                    .card {
+                        max-width: 480px;
+                        width: 90%;
+                        padding: 40px 30px;
+                        background: rgba(15, 23, 42, 0.88);
+                        border-radius: 24px;
+                        border: 1px solid rgba(255, 255, 255, 0.07);
+                        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+                        backdrop-filter: blur(25px);
+                        -webkit-backdrop-filter: blur(25px);
                         text-align: center;
                         z-index: 2;
-                        animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+                        animation: loadCard 0.6s cubic-bezier(0.16, 1, 0.3, 1);
                     }
-                    /* Sovereign Dark-Themed Flag Header */
-                    .flag-container {
+                    /* Darkened/Sovereign Russian Flag representation */
+                    .flag-stripes {
                         display: flex;
                         flex-direction: column;
-                        width: 130px;
-                        height: 24px;
-                        margin: 0 auto 20px auto;
+                        width: 110px;
+                        height: 20px;
+                        margin: 0 auto 28px auto;
                         border-radius: 4px;
                         overflow: hidden;
-                        opacity: 0.65;
-                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        opacity: 0.45;
+                        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+                        border: 1px solid rgba(255, 255, 255, 0.08);
                     }
-                    .flag-stripe {
+                    .stripe {
                         flex: 1;
                         width: 100%;
                     }
-                    .flag-white { background-color: #e5e7eb; }
-                    .flag-blue { background-color: #1e40af; }
-                    .flag-red { background-color: #b91c1c; }
-                    
-                    /* Visual Summer Decorative Birch Outline */
-                    .birch-decor {
+                    .stripe-w { background-color: #E2E8F0; }
+                    .stripe-b { background-color: #1E3A8A; }
+                    .stripe-r { background-color: #991B1B; }
+
+                    /* Summer Organic Decorative Leaf Tag */
+                    .tag {
                         display: inline-flex;
                         align-items: center;
-                        justify-content: center;
-                        color: #10b981;
-                        background: rgba(16, 185, 129, 0.1);
-                        border: 1px solid rgba(16, 185, 129, 0.25);
+                        gap: 6px;
+                        color: #10B981;
+                        background: rgba(16, 185, 129, 0.09);
+                        border: 1px solid rgba(16, 185, 129, 0.2);
                         font-weight: 700;
                         font-size: 11px;
-                        letter-spacing: 1.5px;
-                        padding: 6px 14px;
-                        border-radius: 12px;
-                        margin-bottom: 22px;
+                        letter-spacing: 1px;
+                        padding: 7px 15px;
+                        border-radius: 100px;
+                        margin-bottom: 24px;
                         text-transform: uppercase;
                     }
                     h1 {
-                        font-size: 24px;
-                        color: #ffffff;
-                        margin: 0 0 14px 0;
-                        letter-spacing: 1px;
+                        font-size: 22px;
+                        color: #FFFFFF;
+                        margin: 0 0 16px 0;
+                        letter-spacing: 1.5px;
                         font-weight: 900;
                         text-transform: uppercase;
                     }
-                    .description {
-                        font-size: 13.5px;
-                        color: #9ca3af;
-                        line-height: 1.55;
-                        margin-bottom: 25px;
+                    .desc {
+                        font-size: 14px;
+                        color: #94A3B8;
+                        line-height: 1.6;
+                        margin-bottom: 28px;
                     }
-                    .details-box {
-                        background: rgba(15, 23, 42, 0.6);
-                        border-left: 3.5px solid #ef4444;
-                        padding: 14px 18px;
-                        border-radius: 8px;
+                    .alert-info {
+                        background: rgba(2, 6, 23, 0.5);
+                        border-left: 4px solid #EF4444;
+                        padding: 18px;
+                        border-radius: 12px;
                         text-align: left;
-                        margin-bottom: 25px;
+                        margin-bottom: 30px;
+                        border-top: 1px solid rgba(255, 255, 255, 0.02);
+                        border-bottom: 1px solid rgba(255, 255, 255, 0.02);
                     }
-                    .box-row {
-                        margin-bottom: 8px;
-                        font-size: 13px;
+                    .info-row {
+                        margin-bottom: 10px;
                     }
-                    .box-row:last-child {
+                    .info-row:last-child {
                         margin-bottom: 0;
                     }
-                    .label {
-                        color: #6b7280;
+                    .info-lbl {
+                        color: #64748B;
                         font-weight: 700;
                         display: block;
-                        margin-bottom: 2px;
+                        margin-bottom: 4px;
                         text-transform: uppercase;
                         font-size: 10px;
-                        letter-spacing: 0.8px;
+                        letter-spacing: 1px;
                     }
-                    .value {
-                        color: #e5e7eb;
+                    .info-val {
+                        color: #F1F5F9;
                         word-break: break-all;
-                        font-family: SFMono-Regular, Consolas, "Liberation Mono", Menloco, monospace;
+                        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+                        font-size: 13px;
                     }
-                    .btn-row {
+                    .law-link {
+                        color: #38BDF8;
+                        text-decoration: none;
+                        font-weight: 600;
+                        transition: opacity 0.2s;
+                        border-bottom: 1px dashed rgba(56, 189, 248, 0.4);
+                        padding-bottom: 1px;
+                    }
+                    .law-link:hover {
+                        opacity: 0.85;
+                        color: #7DD3FC;
+                    }
+                    .btn-group {
                         display: flex;
-                        gap: 12px;
+                        gap: 14px;
                         justify-content: center;
                     }
                     .btn {
                         display: inline-flex;
                         align-items: center;
                         justify-content: center;
-                        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-                        border: 1px solid rgba(255, 255, 255, 0.12);
-                        color: #ffffff;
+                        background: #1E293B;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        color: #FFFFFF;
                         text-decoration: none;
-                        padding: 12px 28px;
-                        border-radius: 10px;
+                        padding: 12px 32px;
+                        border-radius: 12px;
                         font-weight: 700;
-                        font-size: 13.5px;
+                        font-size: 14px;
                         cursor: pointer;
-                        transition: all 0.2s ease;
-                        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+                        transition: all 0.2s;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
                     }
                     .btn:hover {
-                        transform: translateY(-2.5f);
-                        border-color: rgba(255, 255, 255, 0.25);
-                        background: #374151;
+                        transform: translateY(-2px);
+                        background: #334155;
+                        border-color: rgba(255, 255, 255, 0.2);
                     }
                     .btn:active {
                         transform: translateY(0);
                     }
                     .btn-primary {
-                        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+                        background: linear-gradient(135deg, #059669 0%, #10B981 100%);
                         border: none;
-                        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+                        box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25);
                     }
                     .btn-primary:hover {
                         background: linear-gradient(135deg, #047857 0%, #059669 100%);
-                        box-shadow: 0 6px 18px rgba(16, 185, 129, 0.35);
+                        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
                     }
-                    .footer-note {
-                        margin-top: 30px;
-                        font-size: 10.5px;
-                        color: #4b5563;
-                        letter-spacing: 0.8px;
+                    .footer {
+                        margin-top: 35px;
+                        font-size: 10px;
+                        color: #475569;
+                        letter-spacing: 1px;
                         font-weight: 700;
                         text-transform: uppercase;
                     }
-                    @keyframes slideUp {
-                        from { opacity: 0; transform: translateY(15px); }
+                    @keyframes loadCard {
+                        from { opacity: 0; transform: translateY(20px); }
                         to { opacity: 1; transform: translateY(0); }
                     }
                 </style>
             </head>
             <body>
-                <div class="summer-glow"></div>
-                <div class="summer-glow-warm"></div>
+                <div class="sun-glow"></div>
+                <div class="meadow-glow"></div>
                 
-                <div class="container">
-                    <!-- Sovereign Dark-Themed Flag Header -->
-                    <div class="flag-container">
-                        <div class="flag-stripe flag-white"></div>
-                        <div class="flag-stripe flag-blue"></div>
-                        <div class="flag-stripe flag-red"></div>
+                <div class="card">
+                    <!-- Sovereign Darkened Tricolor Flag -->
+                    <div class="flag-stripes">
+                        <div class="stripe stripe-w"></div>
+                        <div class="stripe stripe-b"></div>
+                        <div class="stripe stripe-r"></div>
                     </div>
                     
-                    <div class="birch-decor">🌱 Летний Щит Protect</div>
-                    <h1>ДОСТУП ЗАБЛОКИРОВАН</h1>
-                    <p class="description">Запрошенный вами веб-сайт ограничен сервисом суверенной фильтрации ввиду наличия потенциальных угроз или несоответствия требованиям безопасности.</p>
+                    <div class="tag">🌱 Летний Щит — РФ</div>
+                    <h1>ДОСТУП ОГРАНИЧЕН</h1>
+                    <p class="desc">Данный интернет-ресурс заблокирован в связи с нарушениями требований законодательства РФ. Навигация к нему приостановлена.</p>
                     
-                    <div class="details-box">
-                        <div class="box-row">
-                            <span class="label">Адрес ресурса:</span>
-                            <span class="value" style="color: #fca5a5;">$url</span>
+                    <div class="alert-info">
+                        <div class="info-row">
+                            <span class="info-lbl">Адрес сайта:</span>
+                            <span class="info-val" style="color: #FCA5A5;">$url</span>
                         </div>
-                        <div class="box-row">
-                            <span class="label">Статус проверки:</span>
-                            <span class="value">BLOCKED по решению cheburcheck.ru / Реестр РФ</span>
+                        <div class="info-row">
+                            <span class="info-lbl">Основание ограничения:</span>
+                            <span class="info-val">
+                                Соответствие требованиям <a href="http://www.consultant.ru/document/cons_doc_LAW_61798/" target="_blank" class="law-link">Закона 149-ФЗ</a> "Об информации, информационных технологиях и о защите информации"
+                            </span>
                         </div>
                     </div>
 
-                    <div class="btn-row">
+                    <div class="btn-group">
                         <a onclick="window.history.back();" class="btn btn-primary">Назад</a>
                         <a href="about:home" class="btn">Домой</a>
                     </div>
                     
-                    <div class="footer-note">
-                        Интеллектуальная система безопасности «Росбраузер»
+                    <div class="footer">
+                        Суверенный щит безопасности • Росбраузер
                     </div>
                 </div>
             </body>

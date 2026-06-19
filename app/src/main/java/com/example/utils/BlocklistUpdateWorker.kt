@@ -74,10 +74,9 @@ class BlocklistUpdateWorker(
             try {
                 val constraints = Constraints.Builder()
                     .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .setRequiresCharging(true)
                     .build()
 
-                val workRequest = PeriodicWorkRequestBuilder<BlocklistUpdateWorker>(12, TimeUnit.HOURS)
+                val workRequest = PeriodicWorkRequestBuilder<BlocklistUpdateWorker>(1, TimeUnit.HOURS)
                     .setConstraints(constraints)
                     .build()
 
@@ -86,7 +85,7 @@ class BlocklistUpdateWorker(
                     ExistingPeriodicWorkPolicy.KEEP,
                     workRequest
                 )
-                android.util.Log.d("BlocklistUpdateWorker", "Scheduled periodic blocklist update every 12h with charging and network constraints.")
+                android.util.Log.d("BlocklistUpdateWorker", "Scheduled periodic blocklist update every 1 hour with network constraints.")
             } catch (t: Throwable) {
                 android.util.Log.e("BlocklistUpdateWorker", "Failed to schedule periodic work", t)
             }
