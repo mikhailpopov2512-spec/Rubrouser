@@ -817,15 +817,19 @@ fun SummerTabloRecyclerView(
 
             // Track standard dragging initiates to display deletion drop overlays
             container.recyclerView.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+                private var downTime = 0L
+
                 override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean {
                     if (e.action == MotionEvent.ACTION_DOWN) {
+                        downTime = System.currentTimeMillis()
                         val view = rv.findChildViewUnder(e.x, e.y)
                         if (view != null) {
-                            val holder = rv.getChildViewHolder(view)
-                            if (holder.itemViewType == TYPE_TILE) {
-                                // Initiate itemTouch drag manual on extended hold triggers
+                            val holder = rv.findContainingViewHolder(view)
+                            if (holder != null && holder.itemViewType == TYPE_TILE) {
+                                val savedDownTime = downTime
+                                // Initiate itemTouch drag manual on extended hold triggers safely without accessing recycled event fields
                                 Handler(Looper.getMainLooper()).postDelayed({
-                                    if (rv.isAttachedToWindow && e.action == MotionEvent.ACTION_DOWN || rv.scrollState == RecyclerView.SCROLL_STATE_IDLE) {
+                                    if (rv.isAttachedToWindow && savedDownTime == downTime && rv.scrollState == RecyclerView.SCROLL_STATE_IDLE) {
                                         val curHolder = rv.findViewHolderForAdapterPosition(holder.adapterPosition)
                                         if (curHolder != null && curHolder.itemView.isPressed) {
                                             touchHelper.startDrag(curHolder)
@@ -836,6 +840,7 @@ fun SummerTabloRecyclerView(
                             }
                         }
                     } else if (e.action == MotionEvent.ACTION_UP || e.action == MotionEvent.ACTION_CANCEL) {
+                        downTime = 0L
                         container.setTrashCanVisible(false)
                         val remaining = ArrayList<QuickServiceTile>()
                         for (i in 0 until adapter.itemCount - 1) {

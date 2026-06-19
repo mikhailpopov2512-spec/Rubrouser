@@ -271,9 +271,39 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     private var searchSuggestJob: kotlinx.coroutines.Job? = null
     private val httpClient = okhttp3.OkHttpClient.Builder()
-        .connectTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(5, java.util.concurrent.TimeUnit.SECONDS)
+        .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
         .build()
+
+    // Non-blocking cancellable coroutine wrapper for OkHttp
+    private suspend fun okhttp3.Call.await(): okhttp3.Response = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+        continuation.invokeOnCancellation {
+            try {
+                cancel()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+        enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
+                if (continuation.isActive) {
+                    continuation.resumeWith(Result.failure(e))
+                }
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                if (continuation.isActive) {
+                    continuation.resume(response) { _, _, _ -> }
+                } else {
+                    try {
+                        response.close()
+                    } catch (e: Exception) {
+                        // Ignore
+                    }
+                }
+            }
+        })
+    }
 
     fun onSearchInputChanged(query: String) {
         searchSuggestionQuery.value = query
@@ -286,29 +316,26 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        // Fetch local and remote suggestions with a solid 300ms debounce (Req 3)
+        // Fetch local and remote suggestions with a solid 300ms debounce
         searchSuggestJob = viewModelScope.launch {
             kotlinx.coroutines.delay(300)
             
-            withContext(Dispatchers.IO) {
-                try {
-                    val historyList = repository.allHistory.firstOrNull() ?: emptyList()
-                    val matchedHistory = historyList.filter {
-                        it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
-                    }.take(3)
+            // Instantly fetch from thread-safe memory cached lists, avoiding any DB locks/waits!
+            try {
+                val historyList = repository.getCachedHistory()
+                val matchedHistory = historyList.filter {
+                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
+                }.take(3)
 
-                    val bookmarkList = repository.allBookmarks.firstOrNull() ?: emptyList()
-                    val matchedBookmarks = bookmarkList.filter {
-                        it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
-                    }.take(3)
-                    
-                    withContext(Dispatchers.Main) {
-                        localHistorySuggestions.value = matchedHistory
-                        localBookmarkSuggestions.value = matchedBookmarks
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("BrowserViewModel", "Error fetching local suggestions safely", e)
-                }
+                val bookmarkList = repository.getCachedBookmarks()
+                val matchedBookmarks = bookmarkList.filter {
+                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
+                }.take(3)
+                
+                localHistorySuggestions.value = matchedHistory
+                localBookmarkSuggestions.value = matchedBookmarks
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserViewModel", "Error matching local suggestions in-memory", e)
             }
             
             fetchSuggestions(query)
@@ -318,11 +345,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     private suspend fun fetchSuggestions(query: String) {
         withContext(Dispatchers.IO) {
             var attempt = 0
-            val maxRetries = 3
-            var delayMs = 100L
+            val maxRetries = 2
+            var delayMs = 150L
             var success = false
             
             while (attempt < maxRetries && !success) {
+                // Immediately check for coroutine active status using explicit Job context to prevent conflicts
+                val job = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]
+                if (job?.isActive != true) {
+                    throw kotlinx.coroutines.CancellationException("Search cancelled")
+                }
                 try {
                     val encoded = java.net.URLEncoder.encode(query, "UTF-8")
                     val url = "https://suggest.yandex.ru/suggest-ya.cgi?v=4&part=$encoded"
@@ -331,10 +363,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                         .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                         .build()
 
-                    httpClient.newCall(request).execute().use { response ->
-                        if (response.isSuccessful) {
-                            val body = response.body?.string() ?: ""
-                            if (body.isNotBlank()) {
+                    val call = httpClient.newCall(request)
+                    val response = call.await()
+                    response.use { res ->
+                        if (res.isSuccessful) {
+                            val body = res.body?.string() ?: ""
+                            val isCtxActive = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive == true
+                            if (body.isNotBlank() && isCtxActive) {
                                 val jsonArray = org.json.JSONArray(body)
                                 if (jsonArray.length() > 1) {
                                     val suggestionsArray = jsonArray.getJSONArray(1)
@@ -345,14 +380,16 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                                             results.add(s)
                                         }
                                     }
-                                    withContext(Dispatchers.Main) {
-                                        searchSuggestions.value = results.take(8)
+                                    if (kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive == true) {
+                                        withContext(Dispatchers.Main) {
+                                            searchSuggestions.value = results.take(8)
+                                        }
                                     }
                                     success = true
                                 }
                             }
                         } else {
-                            android.util.Log.e("BrowserViewModel", "HTTP response is not successful: ${response.code}")
+                            android.util.Log.e("BrowserViewModel", "HTTP response is not successful: ${res.code}")
                         }
                     }
                     if (!success) {
@@ -367,7 +404,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                     attempt++
                     if (attempt < maxRetries) {
                         kotlinx.coroutines.delay(delayMs)
-                        delayMs *= 2 // exponential backoff
+                        delayMs *= 2
                     }
                 }
             }

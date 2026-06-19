@@ -11,6 +11,8 @@ class BrowserRepository(private val browserDao: BrowserDao) {
 
     private val repositoryScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
     private var cachedBlockedUrls: List<BlockedUrl> = emptyList()
+    private var cachedBookmarks: List<Bookmark> = emptyList()
+    private var cachedHistory: List<HistoryItem> = emptyList()
 
     init {
         repositoryScope.launch {
@@ -22,7 +24,28 @@ class BrowserRepository(private val browserDao: BrowserDao) {
                 android.util.Log.e("BrowserRepository", "Error tracking blocked url updates", e)
             }
         }
+        repositoryScope.launch {
+            try {
+                allBookmarks.collect { list ->
+                    cachedBookmarks = list
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserRepository", "Error tracking bookmarks updates", e)
+            }
+        }
+        repositoryScope.launch {
+            try {
+                allHistory.collect { list ->
+                    cachedHistory = list
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserRepository", "Error tracking history updates", e)
+            }
+        }
     }
+
+    fun getCachedBookmarks(): List<Bookmark> = cachedBookmarks
+    fun getCachedHistory(): List<HistoryItem> = cachedHistory
 
     val allBookmarks: Flow<List<Bookmark>> = browserDao.getAllBookmarks()
     val allHistory: Flow<List<HistoryItem>> = browserDao.getAllHistory()

@@ -415,6 +415,7 @@ fun NewTabPageView(
                                             if (isSpeaking) {
                                                 searchInput = "Портал Госуслуг РФ"
                                                 isSpeaking = false
+                                                onUrlSelected("https://www.gosuslugi.ru")
                                             }
                                         }
                                     }
@@ -441,6 +442,18 @@ fun NewTabPageView(
                             }
 
                             if (searchInput.isNotBlank()) {
+                                IconButton(
+                                    onClick = {
+                                        onUrlSelected(searchInput)
+                                    },
+                                    modifier = Modifier.testTag("ntp_submit_search_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowForward,
+                                        contentDescription = "Поиск",
+                                        tint = if (browserMode == 4) Color(0xFF00FF66) else MaterialTheme.colorScheme.primary
+                                    )
+                                }
                                 IconButton(onClick = { searchInput = "" }) {
                                     Icon(
                                         imageVector = Icons.Default.Clear,
