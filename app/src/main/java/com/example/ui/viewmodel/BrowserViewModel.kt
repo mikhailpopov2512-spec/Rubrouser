@@ -106,6 +106,12 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
 
     // NTP Background Select: 0 = Летний пейзаж (По умолчанию), 1 = Российский флаг (Патриотический), 2 = Минималистичный (Чистый цвет)
     val selectedNtpThemeBackground = MutableStateFlow(sharedPrefs.getInt("ntp_bg_theme", 0))
+    val customWallpaperUrl = MutableStateFlow(sharedPrefs.getString("custom_wallpaper_url", "") ?: "")
+
+    // Permission tracking states
+    val isLocationPermGranted = MutableStateFlow(false)
+    val isNotificationPermGranted = MutableStateFlow(false)
+    val isVoicePermGranted = MutableStateFlow(false)
 
     // Address Bar Position: 0 = Снизу (по умолчанию), 1 = Сверху
     val selectedAddressBarPosition = MutableStateFlow(sharedPrefs.getInt("address_bar_pos", 0))
@@ -159,6 +165,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun setNtpBackgroundTheme(theme: Int) {
         sharedPrefs.edit().putInt("ntp_bg_theme", theme).apply()
         selectedNtpThemeBackground.value = theme
+    }
+
+    fun setCustomWallpaperUrl(url: String) {
+        sharedPrefs.edit().putString("custom_wallpaper_url", url).apply()
+        customWallpaperUrl.value = url
     }
 
     fun setAddressBarPosition(pos: Int) {

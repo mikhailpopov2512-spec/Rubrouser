@@ -240,7 +240,11 @@ fun SettingsScreen(
                             listOf(
                                 "Летний пляж (Анимированное солнце, облака и пруд)",
                                 "Суверенный флаг России (Патриотический)",
-                                "Минималистичный чистый монохром"
+                                "Минималистичный чистый монохром",
+                                "Величественный Байкал (Кристальный синий лёд)",
+                                "Вечерний Кремль (Величественная Москва)",
+                                "Камчатские Гейзеры (Дикая сибирская природа)",
+                                "Пользовательские обои (Ссылка / URL адрес)"
                             ).forEachIndexed { index, name ->
                                 Row(
                                     modifier = Modifier
@@ -257,6 +261,23 @@ fun SettingsScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(name, fontSize = 13.sp, fontWeight = if (ntpBgTheme == index) FontWeight.Bold else FontWeight.Normal)
                                 }
+                            }
+
+                            if (ntpBgTheme == 6) {
+                                val customUrlState by viewModel.customWallpaperUrl.collectAsState()
+                                var urlInput by remember { mutableStateOf(customUrlState) }
+                                OutlinedTextField(
+                                    value = urlInput,
+                                    onValueChange = {
+                                        urlInput = it
+                                        viewModel.setCustomWallpaperUrl(it)
+                                    },
+                                    label = { Text("Адрес изображения (URL обоев)", fontSize = 12.sp) },
+                                    placeholder = { Text("https://example.com/wallpaper.jpg") },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                                    singleLine = true,
+                                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                                )
                             }
 
                             Divider(modifier = Modifier.padding(vertical = 12.dp))

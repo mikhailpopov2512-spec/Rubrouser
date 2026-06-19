@@ -20,6 +20,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import coil.compose.rememberAsyncImagePainter
 import com.example.ui.theme.ThemeManager
 import kotlin.math.sin
 import kotlin.math.cos
@@ -990,17 +994,54 @@ fun PremiumBackdrop(
             .graphicsLayer { alpha = alphaVal * startAlpha }
             .fillMaxSize()
     ) {
-        ComposeCanvas(modifier = Modifier.fillMaxSize()) {
-            val canvas = drawContext.canvas.nativeCanvas
-            if (canvas == null) return@ComposeCanvas
-            val width = size.width
-            val height = size.height
-            if (width <= 1f || height <= 1f) return@ComposeCanvas
-            try {
-                if (isWatermark) {
-                    flagPainter.draw(canvas, width, height, isDark, isWatermark = true, alphaVal = alphaVal, phase = phase)
-                } else {
-                    when (browserMode) {
+        val context = androidx.compose.ui.platform.LocalContext.current
+        val sharedPrefs = remember(context) { context.getSharedPreferences("rosbrowser_prefs", android.content.Context.MODE_PRIVATE) }
+        val customUrl = remember { mutableStateOf(sharedPrefs.getString("custom_wallpaper_url", "") ?: "") }
+
+        // Keep customUrl value updated if changing
+        val currentCustomUrl = sharedPrefs.getString("custom_wallpaper_url", "") ?: ""
+        if (customUrl.value != currentCustomUrl) {
+            customUrl.value = currentCustomUrl
+        }
+
+        if (!isWatermark && browserMode == 0 && selectedBgTheme in 3..6) {
+            val painter = when (selectedBgTheme) {
+                3 -> painterResource(id = com.example.R.drawable.baikal_wallpaper)
+                4 -> painterResource(id = com.example.R.drawable.kremlin_wallpaper)
+                5 -> painterResource(id = com.example.R.drawable.kamchatka_wallpaper)
+                else -> {
+                    if (customUrl.value.isNotBlank()) {
+                        rememberAsyncImagePainter(model = customUrl.value)
+                    } else {
+                        null
+                    }
+                }
+            }
+
+            if (painter != null) {
+                Image(
+                    painter = painter,
+                    contentDescription = "Обои",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                    drawRect(color = if (isDark) Color(0xFF0F172A) else Color(0xFFF1F5F9))
+                }
+            }
+        } else {
+            ComposeCanvas(modifier = Modifier.fillMaxSize()) {
+                val canvas = drawContext.canvas.nativeCanvas
+                if (canvas == null) return@ComposeCanvas
+                val width = size.width
+                val height = size.height
+                if (width <= 1f || height <= 1f) return@ComposeCanvas
+                try {
+                    if (isWatermark) {
+                        flagPainter.draw(canvas, width, height, isDark, isWatermark = true, alphaVal = alphaVal, phase = phase)
+                    } else {
+                        when (browserMode) {
                         1 -> { // INCOGNITO MODE: Cosmic protective dark wind & drifting stars
                             canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
                             if (flagPainter.spaceGrad != null) {
