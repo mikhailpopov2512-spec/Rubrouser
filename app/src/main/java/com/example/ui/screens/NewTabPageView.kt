@@ -58,6 +58,10 @@ fun NewTabPageView(
     val selectedBgTheme by viewModel.selectedNtpThemeBackground.collectAsState()
     val isDark = com.example.ui.theme.ThemeManager.LocalDarkTheme.current
 
+    val userFirstName by viewModel.userFirstName.collectAsState()
+    val userLastName by viewModel.userLastName.collectAsState()
+    val userInterests by viewModel.userInterests.collectAsState()
+
     // Banners alerts dismiss state
     var showRknBanner by remember { mutableStateOf(true) }
     var showWifiWarning by remember { mutableStateOf(true) }
@@ -260,8 +264,33 @@ fun NewTabPageView(
                         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
                     },
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 24.dp)
+                    modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
                 )
+
+                if (userFirstName.isNotBlank() && browserMode == 0) {
+                    Text(
+                        text = "Привет, $userFirstName! \uD83D\uDC4B",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Black,
+                        color = if (isDark) Color(0xFF60A5FA) else com.example.ui.theme.RusBlue,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    )
+                    if (userInterests.isNotEmpty()) {
+                        Text(
+                            text = "Рекомендации подобраны по темам: ${userInterests.joinToString(", ")}",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isDark) Color(0xFF94A3B8) else Color(0xFF475569),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+                    } else {
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                } else {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
                 // SPECIAL INCOGNITO / STEALTH EMBELLISHMENTS
                 if (browserMode == 1) {
@@ -575,7 +604,7 @@ fun NewTabPageView(
                         ) {
                             if (showWeather) {
                                 Box(modifier = Modifier.weight(1f)) {
-                                    AnimatedWeatherWidget(isDark = isDark)
+                                    AnimatedWeatherWidget(isDark = isDark, viewModel = viewModel)
                                 }
                             }
 
@@ -635,16 +664,8 @@ fun NewTabPageView(
 
                     // SECTION 3: MOCK DZEN NEWS FEED WITH PARALLAX & SKELETONS
                     if (showDzen && browserMode == 0) {
-                        var isRefreshingNews by remember { mutableStateOf(false) }
-                        var isAppendingNews by remember { mutableStateOf(false) }
-
-                        val newsItemsState = remember {
-                            mutableStateListOf(
-                                DzenItem("Отечественные IT-компании завершили локализацию 90% критического софта", "Минцифры РФ", "2 часа назад", 1251),
-                                DzenItem("Яндекс расширяет сеть зарядных станций для электромобилей по всей России", "Яндекс Новости", "4 часа назад", 455),
-                                DzenItem("РКН напоминает об ужесточении требований к персональным данным за границей", "ТАСС", "6 часов назад", 99)
-                            )
-                        }
+                        val dzenRealNews by viewModel.dzenRealNews.collectAsState()
+                        val isNewsLoading by viewModel.isNewsLoading.collectAsState()
 
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -662,19 +683,11 @@ fun NewTabPageView(
                             
                             // Tricolor pull-to-refresh spinner simulator
                             IconButton(onClick = {
-                                if (!isRefreshingNews) {
-                                    isRefreshingNews = true
-                                    coroutineScope.launch {
-                                        delay(1100)
-                                        // Update news with a new leading article
-                                        newsItemsState.add(0, DzenItem("Минцифры РФ запустит единую платформу выявления фишинговых сайтов", "Минцифры РФ", "Свежее", 215))
-                                        isRefreshingNews = false
-                                    }
-                                }
+                                viewModel.fetchRealWeatherAndNews()
                             }) {
                                 val refreshRotation = remember { Animatable(0f) }
-                                LaunchedEffect(isRefreshingNews) {
-                                    if (isRefreshingNews) {
+                                LaunchedEffect(isNewsLoading) {
+                                    if (isNewsLoading) {
                                         refreshRotation.animateTo(
                                             targetValue = 360f,
                                             animationSpec = infiniteRepeatable(
@@ -689,26 +702,26 @@ fun NewTabPageView(
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = "Обновить ленту",
-                                    tint = if (isRefreshingNews) Color(0xFF0039A6) else Color.Gray,
+                                    tint = if (isNewsLoading) Color(0xFF0039A6) else Color.Gray,
                                     modifier = Modifier.graphicsLayer { rotationZ = refreshRotation.value }
                                 )
                             }
                         }
 
-                        if (isRefreshingNews) {
+                        if (isNewsLoading && dzenRealNews.isEmpty()) {
                             Column {
                                 SkeletonNewsCard()
                                 SkeletonNewsCard()
                             }
                         } else {
-                            newsItemsState.forEachIndexed { index, item ->
+                            dzenRealNews.forEachIndexed { index, item ->
                                 val parallaxOffset = (scrollState.value * 0.12f).coerceIn(-60f, 60f)
                                 
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = 4.dp)
-                                        .clickable { onUrlSelected("https://yandex.ru/internet_news_mock") },
+                                        .clickable { onUrlSelected(item.link) },
                                     colors = CardDefaults.cardColors(
                                         containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
                                     ),
@@ -775,17 +788,16 @@ fun NewTabPageView(
                                 }
                             }
                             
+                            var isAppendingNews by remember { mutableStateOf(false) }
                             if (isAppendingNews) {
                                 SkeletonNewsCard()
                             } else {
-                                // Load More Button simulating Infinite Scroll (Requirement 25)
                                 Button(
                                     onClick = {
                                         isAppendingNews = true
                                         coroutineScope.launch {
-                                            delay(900)
-                                            newsItemsState.add(DzenItem("Сбербанк представил новые алгоритмы суверенного ИИ", "Сбер пресс-служба", "Свежее", 412))
-                                            newsItemsState.add(DzenItem("Росреестр перенес 100% данных граждан в защищённый суверенный контур", "ТАСС", "Свежее", 168))
+                                            viewModel.fetchRealWeatherAndNews()
+                                            delay(550)
                                             isAppendingNews = false
                                         }
                                     },
@@ -793,7 +805,7 @@ fun NewTabPageView(
                                     border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp)
                                 ) {
-                                    Text("Загрузить ещё статьи", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    Text("Обновить статьи Дзен", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }
@@ -1067,7 +1079,7 @@ fun InteractivePlusTile(
 }
 
 @Composable
-fun AnimatedWeatherWidget(isDark: Boolean) {
+fun AnimatedWeatherWidget(isDark: Boolean, viewModel: com.example.ui.viewmodel.BrowserViewModel) {
     val infiniteTransition = rememberInfiniteTransition(label = "WeatherParticles")
     val time by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -1079,8 +1091,11 @@ fun AnimatedWeatherWidget(isDark: Boolean) {
         label = "ParticleTime"
     )
 
+    val temp by viewModel.realWeatherTemp.collectAsState()
+    val cond by viewModel.realWeatherCond.collectAsState()
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().clickable { viewModel.fetchRealWeatherAndNews() },
         colors = CardDefaults.cardColors(
             containerColor = if (isDark) MaterialTheme.colorScheme.surface.copy(alpha = 0.65f) else Color.White.copy(alpha = 0.9f)
         ),
@@ -1110,7 +1125,7 @@ fun AnimatedWeatherWidget(isDark: Boolean) {
             }
 
             Column(modifier = Modifier.padding(12.dp)) {
-                Text("Погода • Москва", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
+                Text("Погода • РФ", fontSize = 11.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -1118,9 +1133,9 @@ fun AnimatedWeatherWidget(isDark: Boolean) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Icon(imageVector = Icons.Default.WbCloudy, contentDescription = "", tint = Color(0xFF0284C7), modifier = Modifier.size(24.dp))
-                    Text("+24°C", fontSize = 24.sp, fontWeight = FontWeight.Black) // Requirement 18: size 24sp
+                    Text(temp, fontSize = 24.sp, fontWeight = FontWeight.Black) // Requirement 18: size 24sp
                 }
-                Text("Облачно, дождь", fontSize = 9.sp, color = Color.DarkGray)
+                Text(cond, fontSize = 9.sp, color = if (isDark) Color.LightGray else Color.DarkGray)
             }
         }
     }
@@ -1447,7 +1462,8 @@ data class DzenItem(
     val title: String,
     val source: String,
     val time: String,
-    val likes: Int
+    val likes: Int,
+    val link: String = "https://dzen.ru"
 )
 
 data class QuickServiceTile(

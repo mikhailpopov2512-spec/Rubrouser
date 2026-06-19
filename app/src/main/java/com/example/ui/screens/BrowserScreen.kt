@@ -501,6 +501,20 @@ fun BrowserScreen(
                                     )
                                 }
 
+                                if (currentUrl != "about:home") {
+                                    val isTranslated by viewModel.isPageTranslated.collectAsState()
+                                    IconButton(
+                                        onClick = { viewModel.translatePage(webViewRef) },
+                                        modifier = Modifier.testTag("translate_nav_btn")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Translate,
+                                            contentDescription = "Перевести страницу",
+                                            tint = if (isTranslated) MaterialTheme.colorScheme.primary else Color.Gray
+                                        )
+                                    }
+                                }
+
                                 IconButton(
                                     onClick = onNavigateToBookmarks,
                                     modifier = Modifier.testTag("bookmarks_nav_btn")
@@ -550,20 +564,8 @@ fun BrowserScreen(
                             setupBrowserSettings(this)
                             
                             // Native file downloads completed simulation and notification triggers
-                            setDownloadListener { url, _, contentDisposition, mimetype, _ ->
-                                val fileName = try {
-                                    android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype)
-                                } catch (e: Exception) {
-                                    "документ"
-                                }
-                                try {
-                                    viewModel.showLiveNotification(
-                                        title = "Загрузка файла завершена",
-                                        message = "Файл $fileName успешно загружен."
-                                    )
-                                } catch (t: Throwable) {
-                                    Log.e("WebView", "Error during download notify", t)
-                                }
+                            setDownloadListener { url, _, _, _, _ ->
+                                viewModel.startDownload(url)
                             }
                             
                             webViewClient = object : WebViewClient() {

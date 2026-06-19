@@ -51,11 +51,17 @@ class MainActivity : ComponentActivity() {
         MyApplicationTheme(darkTheme = isDarkTheme, dynamicColor = false) {
           var isSplashActive by remember { mutableStateOf(true) }
           var currentScreen by remember { mutableStateOf(AppScreen.BROWSER) }
+          val isOnboarded by viewModel.isOnboarded.collectAsState()
 
           if (isSplashActive) {
             com.example.ui.components.YandexSplashScreen(
               onFinished = { isSplashActive = false }
             )
+          } else if (!isOnboarded) {
+             com.example.ui.screens.UserOnboardingScreen(
+               viewModel = viewModel,
+               modifier = Modifier.fillMaxSize()
+             )
           } else {
             Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
               when (currentScreen) {
