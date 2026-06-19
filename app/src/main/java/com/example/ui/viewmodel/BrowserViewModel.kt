@@ -349,6 +349,13 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
                             android.util.Log.e("BrowserViewModel", "HTTP response is not successful: ${response.code}")
                         }
                     }
+                    if (!success) {
+                        attempt++
+                        if (attempt < maxRetries) {
+                            kotlinx.coroutines.delay(delayMs)
+                            delayMs *= 2
+                        }
+                    }
                 } catch (e: Exception) {
                     android.util.Log.e("BrowserViewModel", "Error fetching search suggestions (attempt ${attempt + 1})", e)
                     attempt++

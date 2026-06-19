@@ -2,12 +2,27 @@ package com.example.data.repository
 
 import com.example.data.database.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.withContext
 import java.net.URL
 
 class BrowserRepository(private val browserDao: BrowserDao) {
+
+    private val repositoryScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+    private var cachedBlockedUrls: List<BlockedUrl> = emptyList()
+
+    init {
+        repositoryScope.launch {
+            try {
+                allBlockedUrls.collect { list ->
+                    cachedBlockedUrls = list
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("BrowserRepository", "Error tracking blocked url updates", e)
+            }
+        }
+    }
 
     val allBookmarks: Flow<List<Bookmark>> = browserDao.getAllBookmarks()
     val allHistory: Flow<List<HistoryItem>> = browserDao.getAllHistory()
@@ -82,10 +97,12 @@ class BrowserRepository(private val browserDao: BrowserDao) {
 
     // Checking if a url is prohibited by RKN. Returns the BlockedUrl model if blocked, otherwise null.
     suspend fun checkBlockedUrl(urlString: String): BlockedUrl? = withContext(Dispatchers.IO) {
-        val patterns = try {
-            browserDao.getBlockedUrlsListSync()
-        } catch (e: Exception) {
-            emptyList()
+        val patterns = cachedBlockedUrls.ifEmpty {
+            try {
+                browserDao.getBlockedUrlsListSync()
+            } catch (e: Exception) {
+                emptyList()
+            }
         }
         val host = try {
             val cleanStr = if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
