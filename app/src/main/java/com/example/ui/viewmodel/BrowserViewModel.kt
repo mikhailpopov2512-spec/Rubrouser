@@ -72,6 +72,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     // Security & AdBlock values
     val isSafeBrowsingEnabled = MutableStateFlow(sharedPrefs.getBoolean("safe_browsing", true))
     val isAdBlockEnabled = MutableStateFlow(sharedPrefs.getBoolean("ad_block", true))
+    val isCheburcheckEnabled = MutableStateFlow(sharedPrefs.getBoolean("cheburcheck_enabled", true))
 
     // GOST Encryption suites: 0 = ГОСТ Р 34.12-2015 "Кузнечик" (Kuznyechik), 1 = ГОСТ 28147-89, 2 = ГОСТ Р 34.10-2012 / ГОСТ Р 34.11-2012
     val selectedGostCipherSuite = MutableStateFlow(sharedPrefs.getInt("gost_cipher_suite", 0))
@@ -182,6 +183,11 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     fun toggleAdBlock(enabled: Boolean) {
         sharedPrefs.edit().putBoolean("ad_block", enabled).apply()
         isAdBlockEnabled.value = enabled
+    }
+
+    fun toggleCheburcheck(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("cheburcheck_enabled", enabled).apply()
+        isCheburcheckEnabled.value = enabled
     }
 
     fun setGostCipherSuite(id: Int) {

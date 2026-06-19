@@ -44,6 +44,7 @@ fun SettingsScreen(
 
     val isSafeBrowsingEnabled by viewModel.isSafeBrowsingEnabled.collectAsState()
     val isAdBlockEnabled by viewModel.isAdBlockEnabled.collectAsState()
+    val isCheburcheckEnabled by viewModel.isCheburcheckEnabled.collectAsState()
 
     val gostCipherSuite by viewModel.selectedGostCipherSuite.collectAsState()
     val useMintsifryCertsOnly by viewModel.useMintsifryCertsOnly.collectAsState()
@@ -900,6 +901,16 @@ fun SettingsScreen(
                                 description = "Блокирует навязчивые баннеры, трекеры и рекламные ролики",
                                 checked = isAdBlockEnabled,
                                 onCheckedChange = { viewModel.toggleAdBlock(it) },
+                                activeColor = accentColor
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            YandexSwitchRow(
+                                title = "Проверять через cheburcheck.ru",
+                                description = "Проверяет сайты по распределенной суверенной базе блокировок перед открытием",
+                                checked = isCheburcheckEnabled,
+                                onCheckedChange = { viewModel.toggleCheburcheck(it) },
                                 activeColor = accentColor
                             )
                         }

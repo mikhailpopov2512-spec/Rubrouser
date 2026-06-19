@@ -581,7 +581,27 @@ fun BrowserScreen(
                                         
                                         // Run block and security inspections
                                         coroutineScope.launch {
-                                            val isBlocked = WebInterceptors.checkRknBlock(it, viewModel.repository) { matchedBlock ->
+                                            val isBlocked = if (viewModel.isCheburcheckEnabled.value) {
+                                                val cheburBlocked = com.example.utils.CheburcheckService.checkUrl(it, viewModel.repository)
+                                                if (cheburBlocked) {
+                                                    viewModel.repository.logBlockedAttempt(it, "Blocked by cheburcheck.ru")
+                                                    try {
+                                                        viewModel.showLiveNotification(
+                                                            title = "Доступ заблокирован",
+                                                            message = "Вход на сайт $it заблокирован cheburcheck.ru."
+                                                        )
+                                                    } catch (tn: Throwable) {
+                                                        Log.e("WebView", "Block notification failed", tn)
+                                                    }
+                                                    val html = com.example.utils.CheburcheckService.generateBlockedPageHtml(it)
+                                                    view?.loadDataWithBaseURL("https://cheburcheck.ru/blocked_stub", html, "text/html", "UTF-8", null)
+                                                    true
+                                                } else {
+                                                    false
+                                                }
+                                            } else {
+                                                var rknBlockedLocal = false
+                                                WebInterceptors.checkRknBlock(it, viewModel.repository) { matchedBlock ->
                                                 // Log blocked attempt to DB for live statistics!
                                                 viewModel.repository.logBlockedAttempt(it, matchedBlock.reason)
                                                 
@@ -598,7 +618,10 @@ fun BrowserScreen(
                                                 // Force load a custom offline RKN HTML warn page
                                                 val html = WebInterceptors.generateBlockedPageHtml(it, matchedBlock.reason, matchedBlock.law)
                                                 view?.loadDataWithBaseURL("https://rkn.gov.ru/blocked_stub", html, "text/html", "UTF-8", null)
+                                                rknBlockedLocal = true
                                             }
+                                            rknBlockedLocal
+                                        }
                                             
                                             if (!isBlocked) {
                                                 // Save page history when we load successfully
