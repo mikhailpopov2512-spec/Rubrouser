@@ -33,7 +33,7 @@
 
         <service
             android:name=".utils.YandexSyncService"
-            android:exported="true"
+            android:exported="false"
             android:process=":sync" />
 
         <service

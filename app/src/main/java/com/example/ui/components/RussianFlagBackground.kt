@@ -396,250 +396,106 @@ class RussianFlagBackground {
             rectF.set(0f, 0f, width, height)
             canvas.drawRect(rectF, skyPaint)
 
-            // 2. ROTATING SUN WITH PULSATING CORONA AND LIGHT RAYS
+            // 2. SUN WITH PULSATING GLOW (Highly Optimized)
             val sunCenterX = width * 0.84f
             val sunCenterY = height * 0.16f
             
             if (isDark) {
                 skyPaint.shader = null
                 skyPaint.color = android.graphics.Color.argb(220, 244, 245, 247)
-                canvas.drawCircle(sunCenterX, sunCenterY, 50f, skyPaint)
+                canvas.drawCircle(sunCenterX, sunCenterY, 35f, skyPaint)
                 skyPaint.color = android.graphics.Color.argb(45, 147, 197, 253)
-                canvas.drawCircle(sunCenterX, sunCenterY, 70f, skyPaint)
+                canvas.drawCircle(sunCenterX, sunCenterY, 50f, skyPaint)
             } else {
                 skyPaint.shader = null
-                val coronaRadius = 75f + 10f * sin(phase * 3f)
-                skyPaint.color = android.graphics.Color.argb(60, 255, 235, 150)
-                canvas.drawCircle(sunCenterX, sunCenterY, coronaRadius, skyPaint)
+                // Optimized Sun without math-heavy loops
+                skyPaint.color = android.graphics.Color.argb(40, 255, 235, 150)
+                canvas.drawCircle(sunCenterX, sunCenterY, 65f, skyPaint)
 
                 skyPaint.color = android.graphics.Color.rgb(253, 184, 19)
-                canvas.drawCircle(sunCenterX, sunCenterY, 48f, skyPaint)
-
-                skyPaint.color = android.graphics.Color.argb(120, 255, 215, 0)
-                skyPaint.strokeWidth = 6f
-                val numRays = 8 // Reduced from 12 for CPU optimization
-                val rayOffsetAngle = phase * 0.15f
-                for (i in 0 until numRays) {
-                    val angle = ((2 * PI / numRays) * i + rayOffsetAngle).toFloat()
-                    val innerR = 56f
-                    val outerR = 90f + 12f * sin(phase * 4f + i)
-                    
-                    val startX = (sunCenterX + innerR * cos(angle)).toFloat()
-                    val startY = (sunCenterY + innerR * sin(angle)).toFloat()
-                    val endX = (sunCenterX + outerR * cos(angle)).toFloat()
-                    val endY = (sunCenterY + outerR * sin(angle)).toFloat()
-                    canvas.drawLine(startX, startY, endX, endY, skyPaint)
-                }
-                skyPaint.strokeWidth = 0f
+                canvas.drawCircle(sunCenterX, sunCenterY, 40f, skyPaint)
             }
 
-            // 3. THREE PARALLAX DRIFTING CLOUDS (White clouds of the landscape)
-            cloudPaint.color = if (isDark) android.graphics.Color.argb(100, 100, 120, 150) else android.graphics.Color.argb(230, 255, 255, 255)
+            // 3. TWO PARALLAX DRIFTING CLOUDS
+            cloudPaint.color = if (isDark) android.graphics.Color.argb(100, 100, 120, 150) else android.graphics.Color.argb(210, 255, 255, 255)
             
-            val cl1X = (width * 0.15f + drift * 0.8f) % (width + 300f) - 150f
-            val cl1Y = height * 0.22f
-            drawProceduralCloud(canvas, cl1X, cl1Y, 1.0f, cloudPaint)
+            val cl1X = (width * 0.2f + drift * 0.5f) % (width + 250f) - 120f
+            val cl1Y = height * 0.2f
+            rectF.set(cl1X - 60f, cl1Y - 20f, cl1X + 60f, cl1Y + 20f)
+            canvas.drawOval(rectF, cloudPaint)
 
-            val cl2X = (width * 0.65f + drift * 1.5f) % (width + 300f) - 150f
-            val cl2Y = height * 0.32f
-            drawProceduralCloud(canvas, cl2X, cl2Y, 0.8f, cloudPaint)
+            val cl2X = (width * 0.7f + drift * 0.9f) % (width + 250f) - 120f
+            val cl2Y = height * 0.3f
+            rectF.set(cl2X - 50f, cl2Y - 18f, cl2X + 50f, cl2Y + 18f)
+            canvas.drawOval(rectF, cloudPaint)
 
-            val cl3X = (width * 0.40f + drift * 2.4f) % (width + 300f) - 150f
-            val cl3Y = height * 0.14f
-            drawProceduralCloud(canvas, cl3X, cl3Y, 0.6f, cloudPaint)
-
-            // 4. BIRCH TRUNKS ON LATERIAL EDGES
+            // 4. BIRCH TRUNKS (Simplified, static, extremely fast)
             birchPaint.color = android.graphics.Color.parseColor("#F5F5FA")
-            rectF.set(0f, height * 0.3f, 50f, height)
+            rectF.set(0f, height * 0.3f, 30f, height)
             canvas.drawRect(rectF, birchPaint)
             
             birchPaint.color = android.graphics.Color.parseColor("#1C1A1A")
-            val numStripes = 8 // Optimized from 12
-            for (i in 0 until numStripes) {
-                val yPos = height * 0.35f + (height * 0.6f / numStripes) * i
-                val stripeHeight = 6f + 4f * sin(i * 1.5f).toFloat()
-                rectF.set(0f, yPos, 22f + 10f * sin(i.toDouble()).toFloat(), yPos + stripeHeight)
+            // A few static stripes instead of math-heavy calculations
+            for (i in 0..4) {
+                val yPos = height * 0.4f + (height * 0.1f * i)
+                rectF.set(0f, yPos, 15f, yPos + 6f)
                 canvas.drawRect(rectF, birchPaint)
             }
 
-            birchPaint.color = android.graphics.Color.parseColor("#F5F5FA")
-            rectF.set(width - 50f, height * 0.25f, width, height)
-            canvas.drawRect(rectF, birchPaint)
-            birchPaint.color = android.graphics.Color.parseColor("#1C1A1A")
-            for (i in 0 until numStripes) {
-                val yPos = height * 0.3f + (height * 0.65f / numStripes) * i
-                val stripeHeight = 6f + 4f * cos(i * 1.5f).toFloat()
-                rectF.set(width - 22f - 10f * cos(i.toDouble()).toFloat(), yPos, width, yPos + stripeHeight)
-                canvas.drawRect(rectF, birchPaint)
-            }
+            // Green canopy
+            birchPaint.color = android.graphics.Color.argb(180, 46, 125, 50)
+            canvas.drawCircle(20f, height * 0.28f, 60f, birchPaint)
+            birchPaint.color = android.graphics.Color.argb(150, 76, 175, 80)
+            canvas.drawCircle(40f, height * 0.33f, 45f, birchPaint)
 
-            val leafColor1 = android.graphics.Color.argb(200, 46, 125, 50)
-            val leafColor2 = android.graphics.Color.argb(180, 76, 175, 80)
-            birchPaint.color = leafColor1
-            
-            val fSwayLeft = 12f * sin(phase * 1.5f)
-            canvas.drawCircle(30f + fSwayLeft, height * 0.28f, 75f, birchPaint)
-            birchPaint.color = leafColor2
-            canvas.drawCircle(55f + fSwayLeft, height * 0.35f, 60f, birchPaint)
-
-            birchPaint.color = leafColor1
-            val fSwayRight = 10f * cos(phase * 1.3f)
-            canvas.drawCircle(width - 30f + fSwayRight, height * 0.22f, 85f, birchPaint)
-            birchPaint.color = leafColor2
-            canvas.drawCircle(width - 60f + fSwayRight, height * 0.29f, 65f, birchPaint)
-
-            // 5. BIRDS / SEAGULLS FLOCK IN V-FORMATION IN DEEP SKY
-            seagullPaint.color = if (isDark) android.graphics.Color.argb(120, 180, 200, 220) else android.graphics.Color.argb(220, 255, 255, 255)
-            
-            val flockX = (width * 0.1f + drift * 2.2f) % (width + 400f) - 200f
-            val flockY = height * 0.3f
-            val wingPhase = phase * 4.5f
-            
-            val offsets = listOf(
-                Pair(0f, 0f),
-                Pair(-45f, -30f),
-                Pair(-45f, 30f) // Reduced flock size for performance
-            )
-            
-            offsets.forEachIndexed { i, off ->
-                val bx = flockX + off.first
-                val by = flockY + off.second + 15f * sin(phase * 0.6f + i)
-                val flap = sin(wingPhase + i).toFloat() * 14f
-                
-                bPath.reset()
-                bPath.moveTo(bx, by)
-                bPath.quadTo(bx - 12f, by - 12f + flap, bx - 25f, by - 6f)
-                bPath.moveTo(bx, by)
-                bPath.quadTo(bx + 12f, by - 12f + flap, bx + 25f, by - 6f)
-                canvas.drawPath(bPath, seagullPaint)
-            }
-            seagullPaint.strokeWidth = 0f
-
-            // 6. BOTTOM GREEN MEADOW LANDSCAPE (Meadow grass floor)
+            // 5. BOTTOM GREEN MEADOW LANDSCAPE (Meadow grass floor)
             landscapePath.reset()
             landscapePath.moveTo(0f, height)
-            landscapePath.lineTo(0f, height * 0.77f)
-            landscapePath.quadTo(width * 0.33f, height * 0.74f + 16f * sin(phase * 0.4f), width * 0.66f, height * 0.78f)
-            landscapePath.quadTo(width * 0.85f, height * 0.79f, width, height * 0.76f)
+            landscapePath.lineTo(0f, height * 0.78f)
+            // Beautiful simple bezier hill
+            landscapePath.quadTo(width * 0.5f, height * 0.74f, width, height * 0.77f)
             landscapePath.lineTo(width, height)
             landscapePath.close()
 
             landscapePaint.color = if (isDark) android.graphics.Color.rgb(20, 54, 30) else android.graphics.Color.rgb(56, 142, 60)
             canvas.drawPath(landscapePath, landscapePaint)
 
-            // 7. BOTTOM CORNER WATER POND WITH INTEGRATED SWIMMING FISH AND RIPPLES
+            // 6. BOTTOM CORNER WATER POND
             val pondCenterX = width * 0.22f
             val pondCenterY = height * 0.88f
-            val pondRadiusX = width * 0.18f
-            val pondRadiusY = height * 0.08f
+            val pondRadiusX = width * 0.15f
+            val pondRadiusY = height * 0.06f
             
             pondPaint.color = if (isDark) android.graphics.Color.rgb(15, 30, 60) else android.graphics.Color.rgb(79, 195, 247)
             rectF.set(pondCenterX - pondRadiusX, pondCenterY - pondRadiusY, pondCenterX + pondRadiusX, pondCenterY + pondRadiusY)
             canvas.drawOval(rectF, pondPaint)
 
-            pondPaint.style = Paint.Style.STROKE
-            pondPaint.strokeWidth = 2.5f
-            pondPaint.color = android.graphics.Color.argb(130, 255, 255, 255)
-            for (r in 0..1) {
-                val rippleFactor = ((phase * 18f + r * 40f) % 75f) / 75f
-                val rx = pondRadiusX * rippleFactor
-                val ry = pondRadiusY * rippleFactor
-                pondPaint.alpha = ((1f - rippleFactor) * 200).toInt()
-                rectF.set(pondCenterX - rx, pondCenterY - ry, pondCenterX + rx, pondCenterY + ry)
-                canvas.drawOval(rectF, pondPaint)
-            }
-            pondPaint.strokeWidth = 0f
-            pondPaint.style = Paint.Style.FILL
-
-            val lilyX = pondCenterX + 30f
-            val lilyY = pondCenterY - 10f
-            pondPaint.color = android.graphics.Color.rgb(46, 117, 89)
-            lilyPath.reset()
-            rectF.set(lilyX - 14f, lilyY - 9f, lilyX + 14f, lilyY + 9f)
-            lilyPath.arcTo(rectF, 35f, 290f, true)
-            lilyPath.close()
-            canvas.drawPath(lilyPath, pondPaint)
-
-            val fishX = pondCenterX - 35f + 18f * cos(phase * 1.8f)
-            val fishY = pondCenterY + 5f + 10f * sin(phase * 1.8f)
-            pondPaint.color = android.graphics.Color.rgb(255, 111, 0)
-            rectF.set(fishX - 9f, fishY - 5f, fishX + 9f, fishY + 5f)
-            canvas.drawOval(rectF, pondPaint)
-            
-            tailPath.reset()
-            tailPath.moveTo(fishX + 8f, fishY)
-            val tailSway = sin(phase * 6f) * 6f
-            tailPath.lineTo(fishX + 16f, fishY - 6f + tailSway)
-            tailPath.lineTo(fishX + 16f, fishY + 6f + tailSway)
-            tailPath.close()
-            canvas.drawPath(tailPath, pondPaint)
-
-            // 8. FLOWERS SPECIALLY RED POPPIES AND WHITE CHAMOMILES FORMING NATURAL TRICOLOR
-            val numFlowers = 8 // Optimized from 14
-            for (f in 0 until numFlowers) {
-                val seed = f * 115.11f
-                val fx = width * 0.08f + (width * 0.84f / numFlowers) * f
-                val curveY = height * 0.77f + 50f
-                val slopeY = curveY - height * 0.015f * sin(f * 0.45).toFloat()
-                val fy = slopeY + 36f * sin(seed).toFloat()
-
+            // 7. SIMPLE FLOWERS (Stems and simple single colored circles - Poppy representing Red/Chamomile representing White)
+            // Draw 4 beautiful, clean minimalist flowers
+            val baseFlowerColors = intArrayOf(
+                android.graphics.Color.rgb(229, 57, 53), // Red poppy
+                android.graphics.Color.WHITE,             // White chamomile
+                android.graphics.Color.rgb(229, 57, 53), // Red poppy
+                android.graphics.Color.WHITE              // White chamomile
+            )
+            for (f in 0..3) {
+                val fx = width * 0.15f + (width * 0.7f / 3f) * f
+                val fy = height * 0.8f + (15f * kotlin.math.sin(f.toDouble())).toFloat()
+                
+                // Stem
                 sparklePaint.color = android.graphics.Color.rgb(76, 175, 80)
-                sparklePaint.strokeWidth = 2.5f
-                val sway = 5f * sin(phase * 0.8f + f).toFloat()
-                canvas.drawLine(fx, fy, fx + sway, fy - 22f, sparklePaint)
-                sparklePaint.strokeWidth = 0f
-
-                val flowerCenterX = fx + sway
-                val flowerCenterY = fy - 22f
-
-                if (f % 2 == 0) {
-                    sparklePaint.color = android.graphics.Color.rgb(229, 57, 53)
-                    val petalRadiusX = 9f
-                    val petalRadiusY = 7f
-                    rectF.set(flowerCenterX - petalRadiusX, flowerCenterY - 4f, flowerCenterX, flowerCenterY + 4f)
-                    canvas.drawOval(rectF, sparklePaint)
-                    rectF.set(flowerCenterX, flowerCenterY - 4f, flowerCenterX + petalRadiusX, flowerCenterY + 4f)
-                    canvas.drawOval(rectF, sparklePaint)
-                    rectF.set(flowerCenterX - 4f, flowerCenterY - petalRadiusY, flowerCenterX + 4f, flowerCenterY)
-                    canvas.drawOval(rectF, sparklePaint)
-                    rectF.set(flowerCenterX - 4f, flowerCenterY, flowerCenterX + 4f, flowerCenterY + petalRadiusY)
-                    canvas.drawOval(rectF, sparklePaint)
-                    
-                    sparklePaint.color = android.graphics.Color.BLACK
-                    canvas.drawCircle(flowerCenterX, flowerCenterY, 3.5f, sparklePaint)
-                } else {
-                    sparklePaint.color = android.graphics.Color.WHITE
-                    val petalR = 6.5f
-                    for (p in 0 until 6) { // Optimized from 8
-                        val pAngle = ((2 * PI / 6) * p).toFloat()
-                        val px = (flowerCenterX + petalR * cos(pAngle)).toFloat()
-                        val py = (flowerCenterY + petalR * sin(pAngle)).toFloat()
-                        canvas.drawCircle(px, py, 2.5f, sparklePaint)
-                    }
+                sparklePaint.strokeWidth = 2f
+                canvas.drawLine(fx, fy, fx, fy - 18f, sparklePaint)
+                
+                // Flower head
+                sparklePaint.color = baseFlowerColors[f]
+                canvas.drawCircle(fx, fy - 18f, 6f, sparklePaint)
+                
+                if (baseFlowerColors[f] == android.graphics.Color.WHITE) {
+                    // Chamomile center
                     sparklePaint.color = android.graphics.Color.rgb(255, 235, 59)
-                    canvas.drawCircle(flowerCenterX, flowerCenterY, 3.5f, sparklePaint)
+                    canvas.drawCircle(fx, fy - 18f, 2.5f, sparklePaint)
                 }
-            }
-
-            // 9. FLUTTERING BUTTERFLIES HOVERING OVER POPPIES
-            val butterPhase = phase * 1.2f
-            
-            val bf1X = width * 0.44f + 80f * cos(butterPhase * 0.7f).toFloat()
-            val bf1Y = height * 0.79f + 40f * sin(butterPhase * 1.1f).toFloat()
-            drawFlutteringButterfly(canvas, bf1X, bf1Y, android.graphics.Color.rgb(255, 152, 0), phase, bfPaint)
-
-            val bf2X = width * 0.72f + 70f * sin(butterPhase * 0.9f).toFloat()
-            val bf2Y = height * 0.78f + 35f * cos(butterPhase * 1.3f).toFloat()
-            drawFlutteringButterfly(canvas, bf2X, bf2Y, android.graphics.Color.rgb(0, 188, 212), phase + 1.2f, bfPaint)
-
-            // 10. GOLDEN POLLEN & SPARKLES SHINING IN SUNBEAMS
-            sparklePaint.color = if (isDark) android.graphics.Color.argb(160, 241, 245, 249) else android.graphics.Color.argb(110, 255, 215, 0)
-            for (s in 0..6) { // Optimized from 12
-                val particleSeed = s * 88.35f
-                val px = (width * 0.1f + (width * 0.8f) * ((sin(particleSeed).toFloat() + 1f) / 2f))
-                val py = (height * 0.35f + (height * 0.55f) * ((1.0f - (phase * 0.4f + s * 0.15f) % 1.0f).toFloat()))
-                val sizeP = 2.5f + 1.5f * sin(phase * 3f + s).toFloat()
-                canvas.drawCircle(px, py, sizeP, sparklePaint)
             }
         } catch (e: Throwable) {
             android.util.Log.e("RussianFlag", "Error in drawSummerBackground", e)

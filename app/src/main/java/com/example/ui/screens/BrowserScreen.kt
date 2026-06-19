@@ -1081,5 +1081,20 @@ private fun setupBrowserSettings(webView: WebView) {
         allowFileAccessFromFileURLs = true
         allowUniversalAccessFromFileURLs = true
         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+        
+        // Premium Chromium engine optimizations (Requirement: "движок Chromium также улучши")
+        cacheMode = WebSettings.LOAD_DEFAULT
+        javaScriptCanOpenWindowsAutomatically = true
+        mediaPlaybackRequiresUserGesture = false
+        
+        // Set high compatibility Russian Yandex/Chrome User-Agent signature for flawless web standard compatibility
+        val standardUA = userAgentString ?: ""
+        userAgentString = if (standardUA.contains("Chrome/")) {
+            standardUA.replace("; wv)", ")").replace("Version/4.0 ", "") + " YandexSearch/23.5"
+        } else {
+            "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36 YandexSearch/23.5 YandexBrowser/23.5"
+        }
     }
+    // Set layer type to hardware for smoother scrolling, dynamic transitions, and video rendering performance
+    webView.setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
 }

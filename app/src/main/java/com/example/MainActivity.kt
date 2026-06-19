@@ -11,7 +11,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.screens.BrowserScreen
-import com.example.ui.screens.ConsentScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.BookmarksHistoryScreen
 import com.example.ui.theme.MyApplicationTheme
@@ -50,24 +49,15 @@ class MainActivity : ComponentActivity() {
         }
 
         MyApplicationTheme(darkTheme = isDarkTheme, dynamicColor = false) {
+          var isSplashActive by remember { mutableStateOf(true) }
           var currentScreen by remember { mutableStateOf(AppScreen.BROWSER) }
 
-          Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-            if (!hasAcceptedTerms) {
-              ConsentScreen(
-                modifier = Modifier.padding(innerPadding),
-                onAccept = {
-                  viewModel.acceptTerms()
-                  if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                      requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 101)
-                    } catch (e: Exception) {
-                      android.util.Log.e("MainActivity", "Failed to request permission on accept", e)
-                    }
-                  }
-                }
-              )
-            } else {
+          if (isSplashActive) {
+            com.example.ui.components.YandexSplashScreen(
+              onFinished = { isSplashActive = false }
+            )
+          } else {
+            Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
               when (currentScreen) {
                 AppScreen.BROWSER -> {
                   BrowserScreen(

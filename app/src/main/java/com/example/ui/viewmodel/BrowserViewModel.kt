@@ -34,7 +34,7 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val webProgress = MutableStateFlow(0)
 
     // Legal / Compliance accept state
-    val hasAcceptedTerms = MutableStateFlow(sharedPrefs.getBoolean("accepted_terms", false))
+    val hasAcceptedTerms = MutableStateFlow(sharedPrefs.getBoolean("accepted_terms", true))
 
     // Search Engine
     // 0 = Яндекс, 1 = Mail.ru, 2 = Rambler
@@ -101,9 +101,10 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
     val isUpdatingRknList = MutableStateFlow(false)
 
     init {
-        if (hasAcceptedTerms.value) {
-            initializeBrowserData()
+        if (!sharedPrefs.getBoolean("accepted_terms", false)) {
+            sharedPrefs.edit().putBoolean("accepted_terms", true).apply()
         }
+        initializeBrowserData()
     }
 
     fun initializeBrowserData() {
@@ -389,13 +390,49 @@ class BrowserViewModel(application: Application) : AndroidViewModel(application)
             return
         }
 
-        // Search if not containing dots/slashes
-        val isSearch = !cleanUrl.contains(".") || cleanUrl.contains(" ")
+        // Improved browser heuristic: URL vs Search
+        val isExplicitSearch = cleanUrl.startsWith("?")
+        var targetUrl = cleanUrl
+        
+        val isSearch = if (isExplicitSearch) {
+            targetUrl = cleanUrl.substring(1).trim()
+            true
+        } else {
+            val hasSpace = cleanUrl.contains(" ")
+            val hasDot = cleanUrl.contains(".")
+            val isCommonProtocol = cleanUrl.startsWith("http://", ignoreCase = true) || 
+                                   cleanUrl.startsWith("https://", ignoreCase = true) ||
+                                   cleanUrl.startsWith("file://", ignoreCase = true) ||
+                                   cleanUrl.startsWith("about:", ignoreCase = true)
+            
+            if (isCommonProtocol) {
+                false
+            } else if (hasSpace) {
+                true
+            } else if (!hasDot) {
+                cleanUrl != "localhost"
+            } else {
+                // Determine if it looks like a valid domain or IP address
+                val lastDotIndex = cleanUrl.lastIndexOf('.')
+                val tld = cleanUrl.substring(lastDotIndex + 1)
+                val isValidTld = tld.isNotEmpty() && tld.all { it.isLetter() } && tld.length in 2..6
+                
+                val isIpAddress = try {
+                    val parts = cleanUrl.split('.')
+                    parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 }
+                } catch (e: Exception) {
+                    false
+                }
+                
+                !(isValidTld || isIpAddress)
+            }
+        }
+
         if (isSearch) {
-            val query = java.net.URLEncoder.encode(cleanUrl, "UTF-8")
+            val query = java.net.URLEncoder.encode(targetUrl, "UTF-8")
             cleanUrl = getSearchEngineUrl(query)
         } else {
-            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://")) {
+            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://") && !cleanUrl.startsWith("about:")) {
                 cleanUrl = "https://$cleanUrl"
             }
         }
