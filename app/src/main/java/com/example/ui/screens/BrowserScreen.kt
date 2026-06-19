@@ -735,7 +735,7 @@ fun BrowserScreen(
                         }
                         val popularSites = listOf(
                             Triple("Портал Госуслуг РФ", "gosuslugi.ru", Icons.Default.AccountBalance),
-                            Triple("Яндекс Поиск и Сервисы", "ya.ru", Icons.Default.Explore),
+                            Triple("РосПоиск и Портал", "ya.ru", Icons.Default.Explore),
                             Triple("ВКонтакте — Общение", "vk.com", Icons.Default.Forum),
                             Triple("Сбербанк Онлайн", "sberbank.ru", Icons.Default.Payments),
                             Triple("Дзен Новости и Медиа", "dzen.ru", Icons.Default.Newspaper),
@@ -877,7 +877,7 @@ fun BrowserScreen(
                         // Under local fallback / offline or loading search state
                         item {
                             ListItem(
-                                headlineContent = { Text("Искать в Яндексе: \"$queryVal\"") },
+                                headlineContent = { Text("Искать в Росбраузере: \"$queryVal\"") },
                                 leadingContent = { Icon(Icons.Default.Search, contentDescription = "Поиск", tint = MaterialTheme.colorScheme.primary) },
                                 modifier = Modifier.clickable {
                                     focusManager.clearFocus()

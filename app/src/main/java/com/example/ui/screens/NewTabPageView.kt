@@ -378,7 +378,7 @@ fun NewTabPageView(
                                 onValueChange = { searchInput = it },
                                 placeholder = {
                                     Text(
-                                        text = if (isSpeaking) "Слушаю вас..." else "Поиск в ${if (searchEngine == 0) "Яндекс" else if (searchEngine == 1) "Mail.ru" else "Rambler"}...",
+                                        text = if (isSpeaking) "Слушаю вас..." else "Поиск в ${if (searchEngine == 0) "Росбраузере" else if (searchEngine == 1) "Mail.ru" else "Rambler"}...",
                                         fontSize = 14.sp
                                     )
                                 },
@@ -812,6 +812,15 @@ fun NewTabPageView(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                
+                Text(
+                    text = "технология на заводе лада",
+                    fontSize = 10.sp,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
+                
                 Spacer(modifier = Modifier.height(60.dp))
             }
         }

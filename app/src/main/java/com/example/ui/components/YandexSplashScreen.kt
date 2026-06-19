@@ -28,9 +28,9 @@ fun YandexSplashScreen(
     onFinished: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Keep splash active for 1.1 seconds
+    // Keep splash active for 400 ms
     LaunchedEffect(Unit) {
-        delay(1100)
+        delay(400)
         onFinished()
     }
 
@@ -61,11 +61,11 @@ fun YandexSplashScreen(
     // Fade-in animated progress list for Russian search security subsystems
     var dynamicStatusText by remember { mutableStateOf("Запуск систем безопасности PROTECT...") }
     LaunchedEffect(Unit) {
-        delay(250)
+        delay(100)
         dynamicStatusText = "Проверка ГОСТ SSL сертификатов Минцифры РФ..."
-        delay(300)
+        delay(120)
         dynamicStatusText = "Синхронизация реестра блокировок ФЗ-149..."
-        delay(300)
+        delay(120)
         dynamicStatusText = "Оптимизация Chromium Engine v114..."
     }
 
@@ -81,7 +81,7 @@ fun YandexSplashScreen(
     }
 
     val textColor = if (isDark) Color.White else Color(0xFF0F172A)
-    val accentColor = Color(0xFFE52E20) // Signature Yandex Red
+    val accentColor = Color(0xFF0052B4) // Premium Royal Blue for RosBrowser
 
     Box(
         modifier = modifier
@@ -93,7 +93,7 @@ fun YandexSplashScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Elegant Animated Yandex Style Logo Canvas
+            // Elegant Animated RosBrowser Style Logo Canvas
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
@@ -116,7 +116,7 @@ fun YandexSplashScreen(
                     )
                 }
 
-                // Inner Canvas drawing Yandex Red/White ring & beautiful custom ribbon
+                // Inner Canvas drawing RosBrowser Tricolor frame & beautiful custom ribbon letter P
                 Canvas(modifier = Modifier.size(110.dp)) {
                     val center = Offset(size.width / 2, size.height / 2)
                     val r = size.minDimension / 2f
@@ -128,7 +128,7 @@ fun YandexSplashScreen(
                         center = center
                     )
                     
-                    // Draw outer signature red/ring frame
+                    // Draw outer signature blue/ring frame
                     drawCircle(
                         color = accentColor,
                         radius = r - 4f,
@@ -136,38 +136,39 @@ fun YandexSplashScreen(
                         style = Stroke(width = 6f)
                     )
 
-                    // 2. Beautiful Red Ribbon "Y" inside the circle
-                    val ribbonPath = Path().apply {
+                    // 2. Beautiful Cyrillic "Р" ribbon inside the circle
+                    val stemPath = Path().apply {
                         val cx = size.width / 2
                         val cy = size.height / 2
                         
-                        // Left branch starting from top left
-                        moveTo(cx - 24f, cy - 36f)
-                        // Down to intersection
-                        lineTo(cx, cy)
-                        // Up to top right branch
-                        lineTo(cx + 24f, cy - 36f)
+                        // Vertical stem on the left
+                        moveTo(cx - 18f, cy - 32f)
+                        lineTo(cx - 6f, cy - 32f)
+                        lineTo(cx - 6f, cy + 32f)
+                        lineTo(cx - 18f, cy + 32f)
+                        close()
+                    }
+                    
+                    val loopPath = Path().apply {
+                        val cx = size.width / 2
+                        val cy = size.height / 2
                         
-                        // Right side of top-right branch
-                        lineTo(cx + 34f, cy - 36f)
-                        // Down with ribbon width
-                        lineTo(cx + 6f, cy - 4f)
-                        // Bottom foot
-                        lineTo(cx + 6f, cy + 38f)
-                        
-                        // Width of bottom foot
-                        lineTo(cx - 6f, cy + 38f)
-                        // Up to left side of ribbon
-                        lineTo(cx - 6f, cy - 4f)
-                        // Left side of top-left branch
-                        lineTo(cx - 34f, cy - 36f)
-                        
+                        // The loop on the right side of the stem
+                        moveTo(cx - 6f, cy - 32f)
+                        lineTo(cx + 12f, cy - 32f)
+                        // Rounded look of "Р"
+                        cubicTo(cx + 26f, cy - 32f, cx + 26f, cy + 4f, cx + 12f, cy + 4f)
+                        lineTo(cx - 6f, cy + 4f)
                         close()
                     }
 
                     drawPath(
-                        path = ribbonPath,
-                        color = accentColor
+                        path = stemPath,
+                        color = Color(0xFFD52B1E) // Bright Red stem
+                    )
+                    drawPath(
+                        path = loopPath,
+                        color = accentColor // Royal Blue loop
                     )
 
                     // Add dynamic sweeping solar ring
@@ -187,20 +188,20 @@ fun YandexSplashScreen(
 
             // Brand Typography
             Text(
-                text = "ЯНДЕКС БРАУЗЕР",
+                text = "РОСБРАУЗЕР",
                 fontWeight = FontWeight.Black,
-                fontSize = 22.sp,
+                fontSize = 24.sp,
                 letterSpacing = 2.sp,
                 color = textColor,
                 fontFamily = FontFamily.SansSerif
             )
 
             Text(
-                text = "БЫСТРЫЙ И БЕЗОПАСНЫЙ",
+                text = "БЫСТРЫЙ, СУВЕРЕННЫЙ, БЕЗОПАСНЫЙ",
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
+                fontSize = 10.sp,
                 letterSpacing = 1.sp,
-                color = accentColor,
+                color = Color(0xFFD52B1E),
                 modifier = Modifier.padding(top = 2.dp)
             )
 
@@ -230,18 +231,27 @@ fun YandexSplashScreen(
             }
         }
 
-        // Bottom Sovereign Stamp
-        Box(
+        // Bottom Sovereign Stamp with Lada Technology credits
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 32.dp)
+                .padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 text = "ПРОВЕРЕНО PROTECT • CHROMIUM v114",
-                fontSize = 10.sp,
+                fontSize = 9.sp,
                 fontWeight = FontWeight.Bold,
                 color = textColor.copy(alpha = 0.35f),
                 letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "технология на заводе лада",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                color = textColor.copy(alpha = 0.6f),
+                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
             )
         }
     }

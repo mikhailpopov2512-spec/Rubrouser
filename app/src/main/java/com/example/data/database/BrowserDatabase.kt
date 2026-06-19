@@ -29,7 +29,7 @@ abstract class BrowserDatabase : RoomDatabase() {
                     BrowserDatabase::class.java,
                     "rosbrowser_database"
                 )
-                .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance

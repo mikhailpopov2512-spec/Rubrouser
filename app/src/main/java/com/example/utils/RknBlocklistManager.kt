@@ -15,6 +15,9 @@ import kotlinx.coroutines.launch
 object RknBlocklistManager {
     private const val TAG = "RknBlocklistManager"
     
+    @Volatile
+    private var isInitialized = false
+    
     // Fast memory cache for blocked pattern lookups
     val blockedCache = LruCache<String, Boolean>(2048)
     
@@ -22,14 +25,16 @@ object RknBlocklistManager {
     val blockedInfoCache = LruCache<String, BlockedUrl>(2048)
 
     fun initialize(context: Context, repository: BrowserRepository) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                Log.d(TAG, "Scheduling blocklist update task...")
-                BlocklistUpdateWorker.schedule(context.applicationContext)
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to schedule blocklist updates", t)
+        synchronized(this) {
+            if (isInitialized) {
+                Log.d(TAG, "Already initialized, skipping.")
+                return
             }
-
+            isInitialized = true
+        }
+        val appCtx = context.applicationContext
+        // 1. Asynchronous blocklist preloading
+        CoroutineScope(Dispatchers.IO).launch {
             try {
                 Log.d(TAG, "Starting asynchronous blocklist preloading...")
                 repository.allBlockedUrls.collect { list ->
@@ -44,6 +49,17 @@ object RknBlocklistManager {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error preloading RKN blocklist", e)
+            }
+        }
+
+        // 2. Delayed background scheduling for WorkManager updates to avoid contention with database creation/prepopulation
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                kotlinx.coroutines.delay(3000)
+                Log.d(TAG, "Scheduling blocklist update task after initial startup delay...")
+                BlocklistUpdateWorker.schedule(appCtx)
+            } catch (t: Throwable) {
+                Log.e(TAG, "Failed to schedule blocklist updates safely", t)
             }
         }
     }

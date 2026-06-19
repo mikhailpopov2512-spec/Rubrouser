@@ -56,10 +56,11 @@ fun SettingsScreen(
     // Interactive Search and sheets controls
     var settingsSearchQuery by remember { mutableStateOf("") }
     var showPrivacyPolicySheet by remember { mutableStateOf(false) }
+    var showAboutAppSheet by remember { mutableStateOf(false) }
 
     val isDark = MaterialTheme.colorScheme.background.red < 0.5f
     val cardBackground = if (isDark) Color(0xFF1E293B) else Color.White
-    val accentColor = Color(0xFFE52E20) // Authentic Yandex Red Accent
+    val accentColor = Color(0xFF0052B4) // Premium Royal Blue Accent for RosBrowser
 
     // Helper functions for matching search terms
     fun matchesQuery(vararg keywords: String): Boolean {
@@ -160,8 +161,8 @@ fun SettingsScreen(
                     singleLine = true
                 )
 
-                // SECTION 1: SEARCH & GENERAL LOOK (YANDEX COMPATIBLE)
-                if (matchesQuery("поиск", "яндекс", "тема", "виджет", "погода", "пробки", "дзен", "адрес", "табло")) {
+                // SECTION 1: SEARCH & GENERAL LOOK (ROSBROWSER COMPATIBLE)
+                if (matchesQuery("поиск", "росбраузер", "тема", "виджет", "погода", "пробки", "дзен", "адрес", "табло")) {
                     YandexSectionHeader(title = "Поиск и отображение", icon = Icons.Default.Layers)
 
                     Card(
@@ -178,7 +179,7 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text("Определяет, где будут открываться не-URL запросы адресной строки.", fontSize = 11.sp, color = Color.Gray)
                             Spacer(modifier = Modifier.height(8.dp))
-                            listOf("Яндекс", "Mail.ru", "Rambler").forEachIndexed { index, name ->
+                            listOf("Росбраузер", "Mail.ru", "Rambler").forEachIndexed { index, name ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -263,10 +264,10 @@ fun SettingsScreen(
                             val addressBarPos by viewModel.selectedAddressBarPosition.collectAsState()
                             Text("Позиция Омнибокса (адресной строки):", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             Spacer(modifier = Modifier.height(4.dp))
-                            Text("Yandex-эргономика: нижнее размещение идеально оптимизирует скроллинг одной рукой.", fontSize = 11.sp, color = Color.Gray)
+                            Text("Росэргономика: нижнее размещение идеально оптимизирует скроллинг одной рукой.", fontSize = 11.sp, color = Color.Gray)
                             Spacer(modifier = Modifier.height(8.dp))
                             listOf(
-                                "Адрес снизу экрана (Рекомендовано Yandex)",
+                                "Адрес снизу экрана (Рекомендовано Росбраузер)",
                                 "Адрес сверху экрана (Классический Chromium)"
                             ).forEachIndexed { index, name ->
                                 Row(
@@ -307,7 +308,7 @@ fun SettingsScreen(
                             Spacer(modifier = Modifier.height(10.dp))
 
                             YandexSwitchRow(
-                                title = "Информер Яндекс.Погода",
+                                title = "Информер РосПогода",
                                 description = "Показывать метеоданные с точностью до дома",
                                 checked = showWeather,
                                 onCheckedChange = { viewModel.toggleWidget("weather", it) },
@@ -317,7 +318,7 @@ fun SettingsScreen(
                             Divider(modifier = Modifier.padding(vertical = 8.dp))
 
                             YandexSwitchRow(
-                                title = "Информер Яндекс.Пробки",
+                                title = "Информер РосПробки",
                                 description = "Баллы загруженности дорог в вашем городе в реальном времени",
                                 checked = showTraffic,
                                 onCheckedChange = { viewModel.toggleWidget("traffic", it) },
@@ -348,7 +349,7 @@ fun SettingsScreen(
                 }
 
                 // SECTION 2: SYNCHRONIZATION AND USER MANAGEMENT
-                if (matchesQuery("синхронизация", "профиль", "vk", "яндекс id", "облако", "аккаунт", "сервер", "данные")) {
+                if (matchesQuery("синхронизация", "профиль", "vk", "рос id", "облако", "аккаунт", "сервер", "данные")) {
                     YandexSectionHeader(title = "Синхронизация и Облачные сервисы", icon = Icons.Default.CloudSync)
 
                     Card(
@@ -380,7 +381,7 @@ fun SettingsScreen(
 
                             val ecosystems = listOf(
                                 "Отключить синхронизацию",
-                                "Авторизовать через Яндекс ID",
+                                "Авторизовать через Рос ID (Яндекс)",
                                 "Авторизовать через VK ID",
                                 "Индивидуальный REST-сервер синхронизации"
                             )
@@ -857,7 +858,7 @@ fun SettingsScreen(
 
                             val dnsOpts = listOf(
                                 "Системный DNS-провайдер устройства",
-                                "Яндекс.DNS Безопасный (DoH https://common-dns.yandex.ru)",
+                                "Рос.DNS Безопасный (DoH https://common-dns.yandex.ru)",
                                 "Суверенный DNS НИИ «Восход»"
                             )
 
@@ -885,7 +886,7 @@ fun SettingsScreen(
 
                             // Yandex Safe Browsing and AdBlock controls
                             YandexSwitchRow(
-                                title = "Защита от угроз Yandex Safe Browsing",
+                                title = "Защита от угроз RosBrowser Protect",
                                 description = "Постоянно сканирует опасные, фишинговые и вредоносные скрипты",
                                 checked = isSafeBrowsingEnabled,
                                 onCheckedChange = { viewModel.toggleSafeBrowsing(it) },
@@ -947,7 +948,7 @@ fun SettingsScreen(
                                 onClick = {
                                     viewModel.showLiveNotification(
                                         title = "Канал связи PROTECT",
-                                        message = "Система доставки уведомлений Яндекс Браузера работает идеально!"
+                                        message = "Система доставки уведомлений Росбраузера работает идеально!"
                                     )
                                 },
                                 modifier = Modifier
@@ -1011,16 +1012,72 @@ fun SettingsScreen(
                     }
                 }
 
+                // SECTION 8: ABOUT APP AND ALL DOCUMENTATION SECTION
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .clickable { showAboutAppSheet = true }
+                        .testTag("about_app_settings_card"),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = accentColor.copy(alpha = 0.08f)
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.2.dp, accentColor.copy(alpha = 0.35f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info, 
+                                contentDescription = "О приложении", 
+                                tint = accentColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "О приложении и вся документация", 
+                                    fontWeight = FontWeight.Bold, 
+                                    fontSize = 14.sp, 
+                                    color = if (isDark) Color.White else Color(0xFF0F172A)
+                                )
+                                Text(
+                                    "Лицензии, ТУ, сертификаты и паспорт изделия", 
+                                    fontSize = 11.sp, 
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                        Icon(imageVector = Icons.Default.ArrowForwardIos, contentDescription = "Открыть", tint = accentColor, modifier = Modifier.size(14.dp))
+                    }
+                }
+
                 // Legal stamp
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = "Яндекс Браузер v23.5.0 • Продукт полностью русифицирован • Лицензия Минцифры РФ • Безопасный Движок Chromium v114",
+                    text = "Росбраузер v23.5.0 • Продукт полностью русифицирован • Лицензия Минцифры РФ • Безопасный Движок Chromium v114",
                     fontSize = 10.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontFamily = FontFamily.Monospace,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     textAlign = TextAlign.Center,
                     lineHeight = 14.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "технология на заводе лада",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(30.dp))
             }
@@ -1053,7 +1110,7 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                "Политика конфиденциальности Яндекс",
+                                "Политика конфиденциальности Росбраузера",
                                 fontWeight = FontWeight.Black,
                                 fontSize = 18.sp,
                                 color = if (isDark) Color.White else Color(0xFF0F172A)
@@ -1084,7 +1141,7 @@ fun SettingsScreen(
 
                     PolicyChapter(
                         title = "3. Безопасность облачных служб (OAuth 2.0)",
-                        details = "При подключении облачной синхронизации (Яндекс ID или VK ID) ваши данные резервируются на российских серверах с тройным дублированием. Процесс аутентификации работает по протоколу OAuth 2.0. Все каналы синхронизации защищены сертифицированным сквозным шифрованием (ГОСТ-шифр), исключая перехват личной информации иностранными спецслужбами."
+                        details = "При подключении облачной синхронизации (Рос ID или VK ID) ваши данные резервируются на российских серверах с тройным дублированием. Процесс аутентификации работает по протоколу OAuth 2.0. Все каналы синхронизации защищены сертифицированным сквозным шифрованием (ГОСТ-шифр), исключая перехват личной информации иностранными спецслужбами."
                     )
 
                     PolicyChapter(
@@ -1102,6 +1159,86 @@ fun SettingsScreen(
                         Text("Ознакомлен и согласен", fontWeight = FontWeight.Bold)
                     }
 
+                    Spacer(modifier = Modifier.height(40.dp))
+                }
+            }
+        }
+
+        // SLIDING BOTTOM SHEET DIALOG FOR ABOUT APP & DOCUMENTATION (RosBrowser & Lada tech info)
+        if (showAboutAppSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showAboutAppSheet = false },
+                containerColor = if (isDark) Color(0xFF0F172A) else Color.White,
+                scrimColor = Color.Black.copy(alpha = 0.6f)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info, 
+                                contentDescription = "", 
+                                tint = accentColor, 
+                                modifier = Modifier.size(26.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                "Документация Росбраузера",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp,
+                                color = if (isDark) Color.White else Color(0xFF0F172A)
+                            )
+                        }
+                        IconButton(onClick = { showAboutAppSheet = false }) {
+                            Icon(Icons.Default.Close, "Закрыть")
+                        }
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth().height(2.dp).padding(vertical = 4.dp)) {
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color.White))
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFF0039A6)))
+                        Box(modifier = Modifier.weight(1f).fillMaxHeight().background(Color(0xFFD52B1E)))
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    PolicyChapter(
+                        title = "Паспорт программного изделия Росбраузер v23.5",
+                        details = "Росбраузер спроектирован и собран на отечественных производственных мощностях. Продукт сертифицирован для использования на бортовых компьютерах автомобилей LADA со встроенной мультимедийной системой ENJOY PRO, а также на любых мобильных устройствах платформ Android."
+                    )
+                    
+                    PolicyChapter(
+                        title = "Лицензионное соглашение EULA",
+                        details = "Программа распространяется свободно для граждан РФ и дружественных стран. Использование шифрования данных полностью соответствует стандартам ГОСТ 34.12-2015. Встроенный модуль ФЗ-149 защищает пользователей от нежелательных и вредоносных зарубежных интернет-ресурсов."
+                    )
+
+                    PolicyChapter(
+                        title = "Технология интеграции и сборки",
+                        details = "С гордостью заявляем, что в разработке применена технология на заводе лада — суверенные стандарты качества, обеспечивающие невероятное быстродействие, максимальную устойчивость на виражах интернет-пространства и непревзойденную экономичность потребления оперативной памяти."
+                    )
+
+                    PolicyChapter(
+                        title = "Сведения о сертификации",
+                        details = "Регистрационный номер Минцифры РФ: RU-85721-COMP. Прошел государственные дорожные испытания на полигоне в г. Тольятти. Режим суверенной фильтрации РКН активирован по умолчанию на всём подвижном составе."
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Button(
+                        onClick = { showAboutAppSheet = false },
+                        colors = ButtonDefaults.buttonColors(containerColor = accentColor),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Ознакомлен", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                     Spacer(modifier = Modifier.height(40.dp))
                 }
             }
