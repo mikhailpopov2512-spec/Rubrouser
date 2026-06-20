@@ -480,7 +480,6 @@ fun SovereignHomePage(
                 ) {
                     gridList.forEach { portal ->
                         Card(
-                            onClick = { viewModel.setUrl(portal.targetUrl) },
                             shape = RoundedCornerShape(14.dp),
                             colors = CardDefaults.cardColors(
                                 containerColor = if (bgTheme == com.example.ui.components.BackgroundTheme.DARK) Color(0x1AFFFFFF) else Color(0x33E2E8F0)
@@ -488,6 +487,7 @@ fun SovereignHomePage(
                             modifier = Modifier
                                 .weight(1f)
                                 .height(80.dp)
+                                .clickable { viewModel.setUrl(portal.targetUrl) }
                                 .border(
                                     0.5.dp,
                                     if (bgTheme == com.example.ui.components.BackgroundTheme.DARK) Color(0x11FFFFFF) else Color(0x09000000),

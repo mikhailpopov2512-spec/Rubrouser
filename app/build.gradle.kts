@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace = "com.example"
-    compileSdk = 33
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.rosbrowser"
         minSdk = 26
-        targetSdk = 33
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0.0"
 
@@ -49,13 +49,6 @@ android {
     }
 }
 
-configurations.all {
-    resolutionStrategy {
-        force("androidx.emoji2:emoji2:1.3.0")
-        force("androidx.emoji2:emoji2-views-helper:1.3.0")
-    }
-}
-
 dependencies {
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
@@ -75,10 +68,6 @@ dependencies {
     // AppCompat & Fragment (Required for BiometricPrompt to work inside Compose properly)
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("androidx.fragment:fragment-ktx:1.6.1")
-
-    // Force older SDK 33 compatible emoji2 versions
-    implementation("androidx.emoji2:emoji2:1.3.0")
-    implementation("androidx.emoji2:emoji2-views-helper:1.3.0")
 
     // Biometric security for Fingerprint and FaceID
     implementation("androidx.biometric:biometric:1.1.0")

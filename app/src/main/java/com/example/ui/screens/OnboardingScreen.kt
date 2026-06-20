@@ -138,13 +138,15 @@ fun OnboardingScreen(
                             onValueChange = { nameInput = it; errorMsg = "" },
                             label = { Text("ФИО гражданина", color = Color(0xFF94A3B8)) },
                             leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Name", tint = Color.LightGray) },
-                            textStyle = TextStyle(color = Color.White),
+                            textStyle = androidx.compose.ui.text.TextStyle(color = Color.White),
                             singleLine = true,
-                            colors = TextFieldDefaults.outlinedTextFieldColors(
+                            colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = Color(0xFF3B82F6),
                                 unfocusedBorderColor = Color(0x66FFFFFF),
                                 focusedLabelColor = Color(0xFF3B82F6),
-                                cursorColor = Color(0xFF3B82F6)
+                                cursorColor = Color(0xFF3B82F6),
+                                focusedTextColor = Color.White,
+                                unfocusedTextColor = Color.White
                             ),
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -159,14 +161,16 @@ fun OnboardingScreen(
                         onValueChange = { emailInput = it; errorMsg = "" },
                         label = { Text("Почта / Логин ID", color = Color(0xFF94A3B8)) },
                         leadingIcon = { Icon(Icons.Default.Email, contentDescription = "Email", tint = Color.LightGray) },
-                        textStyle = TextStyle(color = Color.White),
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White),
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                        colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
                             unfocusedBorderColor = Color(0x66FFFFFF),
                             focusedLabelColor = Color(0xFF3B82F6),
-                            cursorColor = Color(0xFF3B82F6)
+                            cursorColor = Color(0xFF3B82F6),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -180,15 +184,17 @@ fun OnboardingScreen(
                         onValueChange = { passwordInput = it; errorMsg = "" },
                         label = { Text("Пароль доступа", color = Color(0xFF94A3B8)) },
                         leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Password", tint = Color.LightGray) },
-                        textStyle = TextStyle(color = Color.White),
+                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White),
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        colors = TextFieldDefaults.outlinedTextFieldColors(
+                        colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = Color(0xFF3B82F6),
                             unfocusedBorderColor = Color(0x66FFFFFF),
                             focusedLabelColor = Color(0xFF3B82F6),
-                            cursorColor = Color(0xFF3B82F6)
+                            cursorColor = Color(0xFF3B82F6),
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
                         ),
                         modifier = Modifier
                             .fillMaxWidth()
@@ -344,10 +350,3 @@ fun OnboardingScreen(
         )
     }
 }
-
-// Minimalist Text Style wrapper
-private class TextStyle(
-    val color: Color
-) : androidx.compose.ui.text.TextStyle(
-    color = color
-)

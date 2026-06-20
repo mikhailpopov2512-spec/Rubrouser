@@ -170,8 +170,8 @@ private fun DrawScope.drawLandscape(
             val hillPath1 = Path().apply {
                 moveTo(0f, height)
                 lineTo(0f, hillY + 40f)
-                quadraticTo(width * 0.35f, hillY - 30f, width * 0.7f, hillY + 20f)
-                quadraticTo(width * 0.85f, hillY + 40f, width, hillY)
+                quadraticBezierTo(width * 0.35f, hillY - 30f, width * 0.7f, hillY + 20f)
+                quadraticBezierTo(width * 0.85f, hillY + 40f, width, hillY)
                 lineTo(width, height)
                 close()
             }
@@ -180,7 +180,7 @@ private fun DrawScope.drawLandscape(
             val hillPath2 = Path().apply {
                 moveTo(0f, height)
                 lineTo(0f, hillY + 90f)
-                quadraticTo(width * 0.5f, hillY + 30f, width, hillY + 70f)
+                quadraticBezierTo(width * 0.5f, hillY + 30f, width, hillY + 70f)
                 lineTo(width, height)
                 close()
             }
@@ -191,8 +191,8 @@ private fun DrawScope.drawLandscape(
             val hillPath1 = Path().apply {
                 moveTo(0f, height)
                 lineTo(0f, hillY + 50f)
-                quadraticTo(width * 0.4f, hillY, width * 0.8f, hillY + 60f)
-                quadraticTo(width * 0.9f, hillY + 70f, width, hillY + 30f)
+                quadraticBezierTo(width * 0.4f, hillY, width * 0.8f, hillY + 60f)
+                quadraticBezierTo(width * 0.9f, hillY + 70f, width, hillY + 30f)
                 lineTo(width, height)
                 close()
             }
@@ -201,7 +201,7 @@ private fun DrawScope.drawLandscape(
             val hillPath2 = Path().apply {
                 moveTo(0f, height)
                 lineTo(0f, hillY + 110f)
-                quadraticTo(width * 0.5f, hillY + 60f, width, hillY + 100f)
+                quadraticBezierTo(width * 0.5f, hillY + 60f, width, hillY + 100f)
                 lineTo(width, height)
                 close()
             }
@@ -212,7 +212,7 @@ private fun DrawScope.drawLandscape(
             val hillPath = Path().apply {
                 moveTo(0f, height)
                 lineTo(0f, hillY + 80f)
-                quadraticTo(width * 0.5f, hillY + 20f, width, hillY + 80f)
+                quadraticBezierTo(width * 0.5f, hillY + 20f, width, hillY + 80f)
                 lineTo(width, height)
                 close()
             }
