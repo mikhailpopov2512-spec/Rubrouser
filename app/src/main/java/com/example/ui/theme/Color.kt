@@ -2,14 +2,10 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Patriot Sovereign Theme Colors
-val RusWhite = Color(0xFFF8FAFC)
-val RusBlue = Color(0xFF0039A6)
-val RusRed = Color(0xFFD52B1E)
+val Purple80 = Color(0xFFD0BCFF)
+val PurpleGrey80 = Color(0xFFCCC2DC)
+val Pink80 = Color(0xFFEFB8C8)
 
-val DarkSlateBg = Color(0xFF0B0F19)
-val DarkSlateCard = Color(0xFF162032)
-
-val LightSlateBg = Color(0xFFF1F5F9)
-val LightSlateCard = Color(0xFFFFFFFF)
-
+val Purple40 = Color(0xFF6650a4)
+val PurpleGrey40 = Color(0xFF625b71)
+val Pink40 = Color(0xFF7D5260)

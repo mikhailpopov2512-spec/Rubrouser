@@ -1,879 +1,237 @@
 package com.example.ui.viewmodel
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.data.database.*
-import com.example.data.repository.BrowserRepository
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
+import com.example.data.PasswordRepository
+import com.example.data.SavedCredential
+import com.example.ui.components.BackgroundTheme
+import com.example.utils.FilteringLevel
+import com.example.utils.RknBlocklistManager
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+
+enum class BrowserTab {
+    HOME,
+    SETTINGS,
+    PASSWORD_MANAGER,
+    ABOUT
+}
 
 class BrowserViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val sharedPrefs = application.getSharedPreferences("rosbrowser_prefs", Context.MODE_PRIVATE)
-    private val scope = viewModelScope
+    private val passwordRepository = PasswordRepository(application)
 
-    // Database / Repository
-    private val database = BrowserDatabase.getDatabase(application, scope)
-    val repository = BrowserRepository(database.browserDao())
+    // Current page URL
+    private val _currentUrl = MutableStateFlow("rosbrowser://home")
+    val currentUrl: StateFlow<String> = _currentUrl.asStateFlow()
 
-    // UI state parameters
-    val bookmarks = repository.allBookmarks.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val history = repository.allHistory.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val blockedUrls = repository.allBlockedUrls.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val blockedAttempts = repository.allBlockedAttempts.stateIn(scope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val blockedAttemptsCount = repository.blockedAttemptsCount.stateIn(scope, SharingStarted.WhileSubscribed(5000), 0)
+    // Home visual search text
+    private val _searchText = MutableStateFlow("")
+    val searchText: StateFlow<String> = _searchText.asStateFlow()
 
-    // Current page state
-    val currentUrl = MutableStateFlow("about:home")
-    val pageTitle = MutableStateFlow("Новая вкладка")
-    val isWebLoading = MutableStateFlow(false)
-    val webProgress = MutableStateFlow(0)
+    // Screen tabs/views
+    private val _activeTab = MutableStateFlow(BrowserTab.HOME)
+    val activeTab: StateFlow<BrowserTab> = _activeTab.asStateFlow()
 
-    // Legal / Compliance accept state
-    val hasAcceptedTerms = MutableStateFlow(sharedPrefs.getBoolean("accepted_terms", true))
+    // Visual theme setting
+    private val _backgroundTheme = MutableStateFlow(BackgroundTheme.SUMMER)
+    val backgroundTheme: StateFlow<BackgroundTheme> = _backgroundTheme.asStateFlow()
 
-    // Onboarding User Personalization states
-    val isOnboarded = MutableStateFlow(sharedPrefs.getBoolean("user_onboarded", false))
-    val userFirstName = MutableStateFlow(sharedPrefs.getString("user_first_name", "") ?: "")
-    val userLastName = MutableStateFlow(sharedPrefs.getString("user_last_name", "") ?: "")
-    val userInterests = MutableStateFlow(sharedPrefs.getStringSet("user_interests", emptySet()) ?: emptySet())
+    // Password manager biometric / login state
+    private val _isPasswordManagerUnlocked = MutableStateFlow(false)
+    val isPasswordManagerUnlocked: StateFlow<Boolean> = _isPasswordManagerUnlocked.asStateFlow()
 
-    // Real Online Weather metrics
-    val realWeatherTemp = MutableStateFlow("+24°C")
-    val realWeatherCond = MutableStateFlow("Облачно, без осадков")
+    // Account system
+    private val _isRegistered = MutableStateFlow(false)
+    val isRegistered: StateFlow<Boolean> = _isRegistered.asStateFlow()
 
-    // Full Real Dzen Live Feed loading
-    val dzenRealNews = MutableStateFlow<List<com.example.ui.screens.DzenItem>>(emptyList())
-    val isNewsLoading = MutableStateFlow(false)
+    private val _isLoggedIn = MutableStateFlow(false)
+    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
 
-    // User active/historic download state tracker
-    val activeDownloads = java.util.concurrent.CopyOnWriteArrayList<DownloadItem>()
-    val downloadsFlow = MutableStateFlow<List<DownloadItem>>(emptyList())
+    private val _userName = MutableStateFlow("")
+    val userName: StateFlow<String> = _userName.asStateFlow()
 
-    // Page Translate engine state
-    val isPageTranslated = MutableStateFlow(false)
-    val pageTranslationLanguage = MutableStateFlow("ru")
+    private val _userEmail = MutableStateFlow("")
+    val userEmail: StateFlow<String> = _userEmail.asStateFlow()
 
-    // Search Engine
-    // 0 = Яндекс, 1 = Mail.ru, 2 = Rambler
-    val selectedSearchEngine = MutableStateFlow(sharedPrefs.getInt("search_engine", 0))
+    // List of credentials from repository
+    val credentialsList: StateFlow<List<SavedCredential>> = passwordRepository.credentials
 
-    // DNS over HTTPS
-    // 0 = Системный, 1 = Яндекс DoH, 2 = НИИ Восход DoH
-    val selectedDnsType = MutableStateFlow(sharedPrefs.getInt("dns_type", 1))
+    // Blocklist states linked to RknBlocklistManager singleton
+    val filteringLevel = RknBlocklistManager.filteringLevel
+    val blockedCount = RknBlocklistManager.blockedDomainsCount
+    val customBlockedList = RknBlocklistManager.customBlockedDomains
+    val blockedServices = RknBlocklistManager.blockedServices
 
-    // Sync state
-    // 0 = Отключена, 1 = Яндекс ID, 2 = VK ID, 3 = Свой сервер
-    val syncType = MutableStateFlow(sharedPrefs.getInt("sync_type", 0))
-    val customSyncEndpoint = MutableStateFlow(sharedPrefs.getString("sync_endpoint", "https://api.rosbrowser.ru/sync") ?: "https://api.rosbrowser.ru/sync")
-    val syncAccountName = MutableStateFlow(sharedPrefs.getString("sync_account_name", "") ?: "")
-    val isSyncing = MutableStateFlow(false)
-    val syncStatusMessage = MutableStateFlow("Синхронизация отключена")
-
-    // Dynamic Live notification state for 100% visual arrival guarantees
-    val liveNotification = MutableStateFlow<Pair<String, String>?>(null)
-
-    fun showLiveNotification(title: String, message: String) {
-        liveNotification.value = Pair(title, message)
-        try {
-            com.example.utils.BrowserNotificationHelper.showNotification(
-                getApplication(),
-                id = (System.currentTimeMillis() % 10000 + 5000).toInt(),
-                title = title,
-                message = message
-            )
-        } catch (t: Throwable) {
-            // Safe fallback
-        }
-    }
-
-    // Security & AdBlock values
-    val isSafeBrowsingEnabled = MutableStateFlow(sharedPrefs.getBoolean("safe_browsing", true))
-    val isAdBlockEnabled = MutableStateFlow(sharedPrefs.getBoolean("ad_block", true))
-    val isCheburcheckEnabled = MutableStateFlow(sharedPrefs.getBoolean("cheburcheck_enabled", true))
-
-    // GOST Encryption suites: 0 = ГОСТ Р 34.12-2015 "Кузнечик" (Kuznyechik), 1 = ГОСТ 28147-89, 2 = ГОСТ Р 34.10-2012 / ГОСТ Р 34.11-2012
-    val selectedGostCipherSuite = MutableStateFlow(sharedPrefs.getInt("gost_cipher_suite", 0))
-    // Strict trust store: true = only national Russian government certificates allowed, false = standard web trust with national certificates enabled
-    val useMintsifryCertsOnly = MutableStateFlow(sharedPrefs.getBoolean("mintsifry_certs_only", false))
-
-    // Theme select: 0 = Системная, 1 = Светлая (по умолчанию), 2 = Тёмная
-    val selectedThemeMode = MutableStateFlow(sharedPrefs.getInt("theme_mode", 1))
-
-    // NTP Background Select: 0 = Летний пейзаж (По умолчанию), 1 = Российский флаг (Патриотический), 2 = Минималистичный (Чистый цвет)
-    val selectedNtpThemeBackground = MutableStateFlow(sharedPrefs.getInt("ntp_bg_theme", 0))
-    val customWallpaperUrl = MutableStateFlow(sharedPrefs.getString("custom_wallpaper_url", "") ?: "")
-
-    // Permission tracking states
-    val isLocationPermGranted = MutableStateFlow(false)
-    val isNotificationPermGranted = MutableStateFlow(false)
-    val isVoicePermGranted = MutableStateFlow(false)
-
-    // Address Bar Position: 0 = Снизу (по умолчанию), 1 = Сверху
-    val selectedAddressBarPosition = MutableStateFlow(sharedPrefs.getInt("address_bar_pos", 0))
-
-    // Browser Modes: 0 = Стандартный, 1 = Инкогнито, 2 = Гостевой, 3 = Детский, 4 = Stealth (Скрытный)
-    val currentBrowserMode = MutableStateFlow(0)
-
-    // NTP Widgets Display Toggles
-    val showWeatherWidget = MutableStateFlow(sharedPrefs.getBoolean("w_weather", true))
-    val showTrafficWidget = MutableStateFlow(sharedPrefs.getBoolean("w_traffic", true))
-    val showRatesWidget = MutableStateFlow(sharedPrefs.getBoolean("w_rates", true))
-    val showDzenWidget = MutableStateFlow(sharedPrefs.getBoolean("w_dzen", true))
-
-    // RKN database info
-    val lastRknUpdate = MutableStateFlow(sharedPrefs.getString("rkn_last_update", "13.06.2026 04:12") ?: "13.06.2026 04:12")
-    val isUpdatingRknList = MutableStateFlow(false)
+    // Live logging of blocked activities for visual feedback on start page
+    private val _blockedLogs = MutableStateFlow<List<String>>(emptyList())
+    val blockedLogs: StateFlow<List<String>> = _blockedLogs.asStateFlow()
 
     init {
-        if (!sharedPrefs.getBoolean("accepted_terms", false)) {
-            sharedPrefs.edit().putBoolean("accepted_terms", true).apply()
-        }
-        initializeBrowserData()
-    }
+        // Shared preferences for basic user registration persistence
+        val context = getApplication<Application>()
+        val prefs = context.getSharedPreferences("rosbrowser_user", Application.MODE_PRIVATE)
+        _isRegistered.value = prefs.getBoolean("user_registered", false)
+        _isLoggedIn.value = prefs.getBoolean("user_logged_in", false)
+        _userName.value = prefs.getString("user_name", "") ?: ""
+        _userEmail.value = prefs.getString("user_email", "") ?: ""
 
-    fun initializeBrowserData() {
-        // Log sync state on start
-        updateSyncMessage()
-
-        // Asynchronously check and prepopulate database if empty on Dispatchers.IO, avoiding Room onCreate deadlocks
-        scope.launch(Dispatchers.IO) {
-            try {
-                if (repository.getBlockedUrlsCount() == 0) {
-                    repository.restoreDefaultBlocklist()
-                }
-                if (repository.getBookmarksCount() == 0) {
-                    repository.restoreDefaultBookmarks()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("BrowserViewModel", "Error prepopulating Database", e)
-            }
-        }
-        fetchRealWeatherAndNews()
-    }
-
-    // Theme and Bar Position setters
-    fun setThemeMode(mode: Int) {
-        sharedPrefs.edit().putInt("theme_mode", mode).apply()
-        selectedThemeMode.value = mode
-    }
-
-    fun setNtpBackgroundTheme(theme: Int) {
-        sharedPrefs.edit().putInt("ntp_bg_theme", theme).apply()
-        selectedNtpThemeBackground.value = theme
-    }
-
-    fun setCustomWallpaperUrl(url: String) {
-        sharedPrefs.edit().putString("custom_wallpaper_url", url).apply()
-        customWallpaperUrl.value = url
-    }
-
-    fun setAddressBarPosition(pos: Int) {
-        sharedPrefs.edit().putInt("address_bar_pos", pos).apply()
-        selectedAddressBarPosition.value = pos
-    }
-
-    fun setBrowserMode(mode: Int) {
-        currentBrowserMode.value = mode
-    }
-
-    fun toggleWidget(widgetType: String, enabled: Boolean) {
-        sharedPrefs.edit().putBoolean("w_$widgetType", enabled).apply()
-        when (widgetType) {
-            "weather" -> showWeatherWidget.value = enabled
-            "traffic" -> showTrafficWidget.value = enabled
-            "rates" -> showRatesWidget.value = enabled
-            "dzen" -> showDzenWidget.value = enabled
-        }
-    }
-
-    // Consent management
-    fun acceptTerms() {
-        sharedPrefs.edit().putBoolean("accepted_terms", true).apply()
-        hasAcceptedTerms.value = true
-        initializeBrowserData()
-    }
-
-    // Settings actions
-    fun setSearchEngine(id: Int) {
-        sharedPrefs.edit().putInt("search_engine", id).apply()
-        selectedSearchEngine.value = id
-    }
-
-    fun setDnsType(id: Int) {
-        sharedPrefs.edit().putInt("dns_type", id).apply()
-        selectedDnsType.value = id
-    }
-
-    fun toggleSafeBrowsing(enabled: Boolean) {
-        sharedPrefs.edit().putBoolean("safe_browsing", enabled).apply()
-        isSafeBrowsingEnabled.value = enabled
-    }
-
-    fun toggleAdBlock(enabled: Boolean) {
-        sharedPrefs.edit().putBoolean("ad_block", enabled).apply()
-        isAdBlockEnabled.value = enabled
-    }
-
-    fun toggleCheburcheck(enabled: Boolean) {
-        sharedPrefs.edit().putBoolean("cheburcheck_enabled", enabled).apply()
-        isCheburcheckEnabled.value = enabled
-    }
-
-    fun setGostCipherSuite(id: Int) {
-        sharedPrefs.edit().putInt("gost_cipher_suite", id).apply()
-        selectedGostCipherSuite.value = id
-        showLiveNotification(
-            title = "Конфигурация ГОСТ изменена",
-            message = "Выбран новый стандарт шифрования: " + when(id) {
-                0 -> "ГОСТ Р 34.12-2015 'Кузнечик'"
-                1 -> "ГОСТ 28147-89"
-                else -> "ГОСТ Р 34.10-2012 / 34.11-2012"
-            }
-        )
-    }
-
-    fun toggleMintsifryCertsOnly(enabled: Boolean) {
-        sharedPrefs.edit().putBoolean("mintsifry_certs_only", enabled).apply()
-        useMintsifryCertsOnly.value = enabled
-        showLiveNotification(
-            title = if (enabled) "Строгое доверие Минцифры" else "Гибридный режим доверия",
-            message = if (enabled) "Соединения разрешены ТОЛЬКО к отечественным узлам с ГОСТ-сертификацией." else "Разрешены все легитимные соединения с поддержкой национальных ГОСТ-сертификатов."
-        )
-    }
-
-    // Manual blocklist checking
-    fun updateRknBlocklist() {
-        viewModelScope.launch {
-            isUpdatingRknList.value = true
-            // Simulate 1.5s update from https://api.rkn.gov.ru/
-            withContext(Dispatchers.IO) {
-                kotlinx.coroutines.delay(1500)
-                // Add an update domain randomly to show action
-                repository.addBlockedUrl("banned-site-${System.currentTimeMillis() % 1000}.ru", "Решение Роскомнадзора об ограничении доступа на основании Федерального закона №149-ФЗ")
-            }
-            val formatter = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm:ss", java.util.Locale.getDefault())
-            val nowStr = formatter.format(java.util.Date())
-            sharedPrefs.edit().putString("rkn_last_update", nowStr).apply()
-            lastRknUpdate.value = nowStr
-            isUpdatingRknList.value = false
-            showLiveNotification(
-                title = "Реестр РКН обновлен",
-                message = "База ограничений успешно синхронизирована вручную: $nowStr"
-            )
-        }
-    }
-
-    fun clearStats() {
-        viewModelScope.launch {
-            repository.clearBlockedAttempts()
-        }
-    }
-
-    fun addBlockedUrl(pattern: String, reason: String) {
-        viewModelScope.launch {
-            repository.addBlockedUrl(pattern.lowercase().trim(), reason.ifBlank { "Решение Роскомнадзора об ограничении доступа к сайту" })
-        }
-    }
-
-    fun deleteBlockedUrl(id: Int) {
-        viewModelScope.launch {
-            repository.deleteBlockedUrl(id)
-        }
-    }
-
-    fun restoreBlocklistDefaults() {
-        viewModelScope.launch {
-            isUpdatingRknList.value = true
-            withContext(Dispatchers.IO) {
-                repository.restoreDefaultBlocklist()
-                kotlinx.coroutines.delay(800)
-            }
-            isUpdatingRknList.value = false
-        }
-    }
-
-    // Navigation and core loading
-    val searchSuggestionQuery = MutableStateFlow("")
-    val searchSuggestions = MutableStateFlow<List<String>>(emptyList())
-    val localHistorySuggestions = MutableStateFlow<List<com.example.data.database.HistoryItem>>(emptyList())
-    val localBookmarkSuggestions = MutableStateFlow<List<com.example.data.database.Bookmark>>(emptyList())
-
-    private var searchSuggestJob: kotlinx.coroutines.Job? = null
-    private val httpClient = okhttp3.OkHttpClient.Builder()
-        .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-        .build()
-
-    // Non-blocking cancellable coroutine wrapper for OkHttp
-    private suspend fun okhttp3.Call.await(): okhttp3.Response = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
-        continuation.invokeOnCancellation {
-            try {
-                cancel()
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-        enqueue(object : okhttp3.Callback {
-            override fun onFailure(call: okhttp3.Call, e: java.io.IOException) {
-                if (continuation.isActive) {
-                    continuation.resumeWith(Result.failure(e))
-                }
-            }
-
-            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                if (continuation.isActive) {
-                    continuation.resume(response) { _, _, _ -> }
-                } else {
-                    try {
-                        response.close()
-                    } catch (e: Exception) {
-                        // Ignore
-                    }
-                }
-            }
-        })
-    }
-
-    fun onSearchInputChanged(query: String) {
-        searchSuggestionQuery.value = query
-        searchSuggestJob?.cancel()
-        
-        if (query.isBlank()) {
-            searchSuggestions.value = emptyList()
-            localHistorySuggestions.value = emptyList()
-            localBookmarkSuggestions.value = emptyList()
-            return
-        }
-
-        // Fetch local and remote suggestions with a solid 300ms debounce
-        searchSuggestJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(300)
-            
-            // Instantly fetch from thread-safe memory cached lists, avoiding any DB locks/waits!
-            try {
-                val historyList = repository.getCachedHistory()
-                val matchedHistory = historyList.filter {
-                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
-                }.take(3)
-
-                val bookmarkList = repository.getCachedBookmarks()
-                val matchedBookmarks = bookmarkList.filter {
-                    it.title.contains(query, ignoreCase = true) || it.url.contains(query, ignoreCase = true)
-                }.take(3)
-                
-                localHistorySuggestions.value = matchedHistory
-                localBookmarkSuggestions.value = matchedBookmarks
-            } catch (e: Exception) {
-                android.util.Log.e("BrowserViewModel", "Error matching local suggestions in-memory", e)
-            }
-            
-            fetchSuggestions(query)
-        }
-    }
-
-    private suspend fun fetchSuggestions(query: String) {
-        withContext(Dispatchers.IO) {
-            var attempt = 0
-            val maxRetries = 2
-            var delayMs = 150L
-            var success = false
-            
-            while (attempt < maxRetries && !success) {
-                // Immediately check for coroutine active status using explicit Job context to prevent conflicts
-                val job = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]
-                if (job?.isActive != true) {
-                    throw kotlinx.coroutines.CancellationException("Search cancelled")
-                }
-                try {
-                    val encoded = java.net.URLEncoder.encode(query, "UTF-8")
-                    val url = "https://suggest.yandex.ru/suggest-ya.cgi?v=4&part=$encoded"
-                    val request = okhttp3.Request.Builder()
-                        .url(url)
-                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                        .build()
-
-                    val call = httpClient.newCall(request)
-                    val response = call.await()
-                    response.use { res ->
-                        if (res.isSuccessful) {
-                            val body = res.body?.string() ?: ""
-                            val isCtxActive = kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive == true
-                            if (body.isNotBlank() && isCtxActive) {
-                                val jsonArray = org.json.JSONArray(body)
-                                if (jsonArray.length() > 1) {
-                                    val suggestionsArray = jsonArray.getJSONArray(1)
-                                    val results = mutableListOf<String>()
-                                    for (i in 0 until suggestionsArray.length()) {
-                                        val s = suggestionsArray.optString(i)
-                                        if (s.isNotBlank()) {
-                                            results.add(s)
-                                        }
-                                    }
-                                    if (kotlin.coroutines.coroutineContext[kotlinx.coroutines.Job]?.isActive == true) {
-                                        withContext(Dispatchers.Main) {
-                                            searchSuggestions.value = results.take(8)
-                                        }
-                                    }
-                                    success = true
-                                }
-                            }
-                        } else {
-                            android.util.Log.e("BrowserViewModel", "HTTP response is not successful: ${res.code}")
-                        }
-                    }
-                    if (!success) {
-                        attempt++
-                        if (attempt < maxRetries) {
-                            kotlinx.coroutines.delay(delayMs)
-                            delayMs *= 2
-                        }
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("BrowserViewModel", "Error fetching search suggestions (attempt ${attempt + 1})", e)
-                    attempt++
-                    if (attempt < maxRetries) {
-                        kotlinx.coroutines.delay(delayMs)
-                        delayMs *= 2
-                    }
-                }
-            }
-        }
-    }
-
-    fun getLayoutCorrection(input: String): String {
-        val enToRu = mapOf(
-            'q' to 'й', 'w' to 'ц', 'e' to 'у', 'r' to 'к', 't' to 'е', 'y' to 'н', 'u' to 'г', 'i' to 'ш', 'o' to 'щ', 'p' to 'з', '[' to 'х', ']' to 'ъ',
-            'a' to 'ф', 's' to 'ы', 'd' to 'в', 'f' to 'а', 'g' to 'п', 'h' to 'р', 'j' to 'о', 'k' to 'л', 'l' to 'д', ';' to 'ж', '\'' to 'э',
-            'z' to 'я', 'x' to 'ч', 'c' to 'с', 'v' to 'м', 'b' to 'и', 'n' to 'т', 'm' to 'ь', ',' to 'б', '.' to 'ю', '/' to '.'
-        )
-        val ruToEn = enToRu.entries.associate { (k, v) -> v to k }
-        if (input.isBlank()) return input
-        val ruConverted = input.map { enToRu[it.lowercaseChar()] ?: it }.joinToString("")
-        val enConverted = input.map { ruToEn[it.lowercaseChar()] ?: it }.joinToString("")
-        return if (ruConverted != input) ruConverted else enConverted
-    }
-
-    fun loadUrl(url: String) {
-        var cleanUrl = url.trim()
-        if (cleanUrl.isBlank()) return
-
-        if (cleanUrl == "chrome-native://blocked" || cleanUrl == "chrome://blocked") {
-            currentUrl.value = "file:///android_asset/blocked.html"
-            pageTitle.value = "Ресурс заблокирован"
-            return
-        }
-
-        if (cleanUrl == "about:home") {
-            currentUrl.value = "about:home"
-            pageTitle.value = "Новая вкладка"
-            return
-        }
-
-        // Improved browser heuristic: URL vs Search
-        val isExplicitSearch = cleanUrl.startsWith("?")
-        var targetUrl = cleanUrl
-        
-        val isSearch = if (isExplicitSearch) {
-            targetUrl = cleanUrl.substring(1).trim()
-            true
-        } else {
-            val hasSpace = cleanUrl.contains(" ")
-            val hasDot = cleanUrl.contains(".")
-            val isCommonProtocol = cleanUrl.startsWith("http://", ignoreCase = true) || 
-                                   cleanUrl.startsWith("https://", ignoreCase = true) ||
-                                   cleanUrl.startsWith("file://", ignoreCase = true) ||
-                                   cleanUrl.startsWith("about:", ignoreCase = true)
-            
-            if (isCommonProtocol) {
-                false
-            } else if (hasSpace) {
-                true
-            } else if (!hasDot) {
-                cleanUrl != "localhost"
-            } else {
-                // Determine if it looks like a valid domain or IP address
-                val lastDotIndex = cleanUrl.lastIndexOf('.')
-                val tld = cleanUrl.substring(lastDotIndex + 1)
-                val isValidTld = tld.isNotEmpty() && tld.all { it.isLetter() } && tld.length in 2..6
-                
-                val isIpAddress = try {
-                    val parts = cleanUrl.split('.')
-                    parts.size == 4 && parts.all { it.toIntOrNull() in 0..255 }
-                } catch (e: Exception) {
-                    false
-                }
-                
-                !(isValidTld || isIpAddress)
-            }
-        }
-
-        if (isSearch) {
-            val query = java.net.URLEncoder.encode(targetUrl, "UTF-8")
-            cleanUrl = getSearchEngineUrl(query)
-        } else {
-            if (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://") && !cleanUrl.startsWith("about:")) {
-                cleanUrl = "https://$cleanUrl"
-            }
-        }
-        currentUrl.value = cleanUrl
-    }
-
-    private fun getSearchEngineUrl(encodedQuery: String): String {
-        return when (selectedSearchEngine.value) {
-            0 -> "https://ya.ru/search/?text=$encodedQuery"
-            1 -> "https://go.mail.ru/search?q=$encodedQuery"
-            2 -> "https://nova.rambler.ru/search?query=$encodedQuery"
-            else -> "https://ya.ru/search/?text=$encodedQuery"
-        }
-    }
-
-    // History and bookmarks additions
-    fun addBookmark(title: String, url: String) {
-        viewModelScope.launch {
-            repository.insertBookmark(title, url)
-        }
-    }
-
-    fun removeBookmark(url: String) {
-        viewModelScope.launch {
-            repository.deleteBookmarkByUrl(url)
-        }
-    }
-
-    fun addHistory(title: String, url: String) {
-        if (url.startsWith("about:") || url.contains("blocked_stub")) return
-        viewModelScope.launch {
-            repository.addHistoryItem(title, url)
-        }
-    }
-
-    fun clearHistory() {
-        viewModelScope.launch {
-            repository.clearHistory()
-        }
-    }
-
-    fun deleteHistoryItem(id: Int) {
-        viewModelScope.launch {
-            repository.deleteHistoryItem(id)
-        }
-    }
-
-    // Sync Simulation
-    fun setSyncType(type: Int, accountName: String = "", endpoint: String = "") {
-        viewModelScope.launch {
-            isSyncing.value = true
-            sharedPrefs.edit().putInt("sync_type", type).apply()
-            syncType.value = type
-
-            if (accountName.isNotEmpty()) {
-                sharedPrefs.edit().putString("sync_account_name", accountName).apply()
-                syncAccountName.value = accountName
-            }
-            if (endpoint.isNotEmpty()) {
-                sharedPrefs.edit().putString("sync_endpoint", endpoint).apply()
-                customSyncEndpoint.value = endpoint
-            }
-
-            kotlinx.coroutines.delay(1200) // simulated network lag
-            updateSyncMessage()
-            isSyncing.value = false
-        }
-    }
-
-    private fun updateSyncMessage() {
-        syncStatusMessage.value = when (syncType.value) {
-            0 -> "Синхронизация отключена"
-            1 -> "Синхронизировано через Яндекс ID (${syncAccountName.value.ifBlank { "Пользователь" }})"
-            2 -> "Синхронизировано через VK ID (${syncAccountName.value.ifBlank { "Пользователь" }})"
-            3 -> "Синхронизировано через сервер: ${customSyncEndpoint.value}"
-            else -> "Синхронизация отключена"
-        }
-    }
-
-    // Onboarding Data Saver
-    fun saveOnboardingData(firstName: String, lastName: String, interests: Set<String>) {
-        sharedPrefs.edit()
-            .putString("user_first_name", firstName)
-            .putString("user_last_name", lastName)
-            .putStringSet("user_interests", interests)
-            .putBoolean("user_onboarded", true)
-            .apply()
-        userFirstName.value = firstName
-        userLastName.value = lastName
-        userInterests.value = interests
-        isOnboarded.value = true
-        fetchRealWeatherAndNews()
-    }
-
-    // Real Weather and News load
-    fun fetchRealWeatherAndNews() {
-        scope.launch {
-            fetchRealWeather()
-            fetchRealNewsFeed()
-        }
-    }
-
-    private suspend fun fetchRealWeather() {
-        withContext(Dispatchers.IO) {
-            try {
-                val request = okhttp3.Request.Builder()
-                    .url("https://api.open-meteo.com/v1/forecast?latitude=55.7558&longitude=37.6173&current_weather=true")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .build()
-                
-                val response = httpClient.newCall(request).await()
-                response.use { res ->
-                    if (res.isSuccessful) {
-                        val body = res.body?.string() ?: ""
-                        if (body.isNotBlank()) {
-                            val json = org.json.JSONObject(body)
-                            val current = json.optJSONObject("current_weather")
-                            if (current != null) {
-                                val tempVal = current.optDouble("temperature", 24.1)
-                                val code = current.optInt("weathercode", 0)
-                                val formattedTemp = if (tempVal > 0) "+${tempVal.toInt()}°C" else "${tempVal.toInt()}°C"
-                                val condText = when (code) {
-                                    0 -> "Ясно, солнечно"
-                                    1, 2, 3 -> "Малооблачно / Облачно"
-                                    45, 48 -> "Туманность"
-                                    51, 53, 55 -> "Морось"
-                                    61, 63, 65 -> "Дождь"
-                                    71, 73, 75 -> "Снегопад"
-                                    80, 81, 82 -> "Ливень"
-                                    95, 96, 99 -> "Гроза"
-                                    else -> "Облачно, без осадков"
-                                }
-                                withContext(Dispatchers.Main) {
-                                    realWeatherTemp.value = formattedTemp
-                                    realWeatherCond.value = condText
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("BrowserViewModel", "Error loading remote weather", e)
-            }
-        }
-    }
-
-    private suspend fun fetchRealNewsFeed() {
-        if (isNewsLoading.value) return
-        withContext(Dispatchers.Main) { isNewsLoading.value = true }
-        withContext(Dispatchers.IO) {
-            try {
-                val request = okhttp3.Request.Builder()
-                    .url("https://lenta.ru/rss/news")
-                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .build()
-                
-                val response = httpClient.newCall(request).await()
-                val parsedList = mutableListOf<com.example.ui.screens.DzenItem>()
-                response.use { res ->
-                    if (res.isSuccessful) {
-                        val rawXml = res.body?.string() ?: ""
-                        if (rawXml.isNotBlank()) {
-                            var remaining = rawXml
-                            while (remaining.contains("<item>")) {
-                                val sIndex = remaining.indexOf("<item>")
-                                val eIndex = remaining.indexOf("</item>")
-                                if (eIndex <= sIndex) break
-                                val block = remaining.substring(sIndex + 6, eIndex)
-                                
-                                val title = cleanXmlCdata(extractXmlTag(block, "title"))
-                                val category = cleanXmlCdata(extractXmlTag(block, "category")).ifBlank { "Дзен.Новости" }
-                                val pubDate = cleanXmlCdata(extractXmlTag(block, "pubDate")).ifBlank { "Сегодня" }
-                                val link = cleanXmlCdata(extractXmlTag(block, "link"))
-                                
-                                if (title.isNotBlank()) {
-                                    parsedList.add(
-                                        com.example.ui.screens.DzenItem(
-                                            title = title,
-                                            source = category,
-                                            time = formatRssDate(pubDate),
-                                            likes = (100..2500).random(),
-                                            link = link.ifBlank { "https://dzen.ru" }
-                                        )
-                                    )
-                                }
-                                remaining = remaining.substring(eIndex + 7)
-                            }
-                        }
-                    }
-                }
-                
-                val interests = userInterests.value
-                val sorted = if (interests.isNotEmpty()) {
-                    parsedList.sortedWith(compareByDescending { item ->
-                        var score = 0
-                        interests.forEach { interest ->
-                            if (item.title.contains(interest, ignoreCase = true) || item.source.contains(interest, ignoreCase = true)) {
-                                score += 10
-                            }
-                        }
-                        score
-                    })
-                } else {
-                    parsedList
-                }
-
-                val finalList = if (sorted.isEmpty()) {
-                    listOf(
-                        com.example.ui.screens.DzenItem("Отечественные IT-компании заменили более 95% критического софта", "Дзен.Рекомендации", "Недавно", 1432),
-                        com.example.ui.screens.DzenItem("Яндекс Браузер представил революционный движок ускорения сайтов", "Яндекс Новости", "2 часа назад", 823),
-                        com.example.ui.screens.DzenItem("Создана первая суверенная сеть распределенных защищённых ЦОД", "ТАСС", "5 часов назад", 412)
-                    )
-                } else sorted.take(15)
-
-                withContext(Dispatchers.Main) {
-                    dzenRealNews.value = finalList
-                    isNewsLoading.value = false
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("BrowserViewModel", "Error fetching news feed", e)
-                withContext(Dispatchers.Main) {
-                    isNewsLoading.value = false
-                    if (dzenRealNews.value.isEmpty()) {
-                        dzenRealNews.value = listOf(
-                            com.example.ui.screens.DzenItem("Отечественные IT-компании заменят более 95% иностранного софта", "Дзен.Рекомендации", "Недавно", 1432),
-                            com.example.ui.screens.DzenItem("Яндекс Браузер представил революционный движок ускорения сайтов", "Яндекс Новости", "2 часа назад", 823),
-                            com.example.ui.screens.DzenItem("Создана первая суверенная сеть распределенных защищённых ЦОД", "ТАСС", "5 часов назад", 412)
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun extractXmlTag(block: String, tag: String): String {
-        val startTag = "<$tag>"
-        val endTag = "</$tag>"
-        if (!block.contains(startTag) || !block.contains(endTag)) return ""
-        val s = block.indexOf(startTag)
-        val e = block.indexOf(endTag)
-        if (e <= s) return ""
-        return block.substring(s + startTag.length, e)
-    }
-
-    private fun cleanXmlCdata(text: String): String {
-        var s = text.trim()
-        if (s.startsWith("<![CDATA[")) {
-            s = s.substring(9)
-        }
-        if (s.endsWith("]]>")) {
-            s = s.substring(0, s.length - 3)
-        }
-        return s.trim()
-    }
-
-    private fun formatRssDate(rawDate: String): String {
-        return try {
-            if (rawDate.contains(",")) {
-                val cut = rawDate.substringAfter(",").trim()
-                val parts = cut.split(" ")
-                if (parts.size >= 4) {
-                    "${parts[0]} ${parts[1]} ${parts[2]} в ${parts[3].take(5)}"
-                } else cut
-            } else rawDate
+        val savedTheme = prefs.getString("user_theme", "SUMMER") ?: "SUMMER"
+        _backgroundTheme.value = try {
+            BackgroundTheme.valueOf(savedTheme)
         } catch (e: Exception) {
-            "Сегодня"
+            BackgroundTheme.SUMMER
         }
+
+        val savedLevel = prefs.getString("filtering_level", "HIGH") ?: "HIGH"
+        try {
+            RknBlocklistManager.setFilteringLevel(FilteringLevel.valueOf(savedLevel))
+        } catch (e: Exception) {}
+
+        // Mock some dynamic security inspection threats over time to make the dashboard alive
+        startSecuritySnooperSimulator()
     }
 
-    // High fidelity Download Engine simulation satisfying all Yandex Browser offline features
-    fun startDownload(url: String) {
-        val uri = android.net.Uri.parse(url)
-        val rawFileName = uri.lastPathSegment?.ifBlank { "" } ?: ""
-        val fileName = if (rawFileName.isBlank()) {
-            "file_${System.currentTimeMillis() % 10000}.html"
-        } else rawFileName
-
-        val downloadId = "DL_${System.currentTimeMillis()}"
-        val initialItem = DownloadItem(
-            id = downloadId,
-            fileName = fileName,
-            url = url,
-            progress = 0,
-            status = "Скачивание",
-            timestamp = System.currentTimeMillis()
-        )
-        activeDownloads.add(0, initialItem)
-        downloadsFlow.value = activeDownloads.toList()
-
-        showLiveNotification("Росбраузер: Загрузка", "Началось скачивание файла $fileName")
-
-        scope.launch {
-            try {
-                for (p in 1..10) {
-                    kotlinx.coroutines.delay(400)
-                    val progressVal = p * 10
-                    val idx = activeDownloads.indexOfFirst { it.id == downloadId }
-                    if (idx != -1) {
-                        activeDownloads[idx] = activeDownloads[idx].copy(progress = progressVal)
-                        downloadsFlow.value = activeDownloads.toList()
-                    }
-                }
-                val idx = activeDownloads.indexOfFirst { it.id == downloadId }
-                if (idx != -1) {
-                    activeDownloads[idx] = activeDownloads[idx].copy(progress = 100, status = "Завершено")
-                    downloadsFlow.value = activeDownloads.toList()
-                }
-                showLiveNotification("Росбраузер: Загрузка завершена", "Файл $fileName успешно сохранен в /Downloads")
-            } catch (e: Exception) {
-                val idx = activeDownloads.indexOfFirst { it.id == downloadId }
-                if (idx != -1) {
-                    activeDownloads[idx] = activeDownloads[idx].copy(status = "Ошибка")
-                    downloadsFlow.value = activeDownloads.toList()
-                }
-            }
-        }
-    }
-
-    // Translate action modifying loaded DOM inside WebView
-    fun translatePage(webView: android.webkit.WebView?) {
-        webView ?: return
-        if (isPageTranslated.value) {
-            // Restore translation
-            webView.evaluateJavascript(
-                "(function() { location.reload(); })();",
-                null
+    private fun startSecuritySnooperSimulator() {
+        viewModelScope.launch {
+            val simulationDomains = listOf(
+                "metrica.yandex.ru/analytics",
+                "google-analytics.com/j/collect",
+                "doubleclick.net/ads",
+                "ad.host.tracking.ru",
+                "facebook.com/tr",
+                "spy-telemetry.net/ping",
+                "api.instagram.com/graphql"
             )
-            isPageTranslated.value = false
-            showLiveNotification("Росбраузер: Переводчик", "Возврат к оригиналу")
-        } else {
-            // Translate using real client-side injection to translate text nodes to Russian
-            val translateJs = """
-                (function() {
-                    const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
-                    let node;
-                    while(node = walk.nextNode()) {
-                        const t = node.nodeValue.trim();
-                        if (t.length > 0 && !/^[А-Яа-яЁё0-9\s.,!?-]+$/.test(t)) {
-                            node.nodeValue = "[Перевод] " + t.replace("the", "это").replace("The", "Это").replace("and", "и").replace("to", "к");
-                        }
-                    }
-                })();
-            """.trimIndent()
-            webView.evaluateJavascript(translateJs) {
-                isPageTranslated.value = true
-                showLiveNotification("Росбраузер: Переводчик", "Страница успешно переведена на русский язык!")
+            var index = 0
+            while (true) {
+                delay(12000) // Every 12 seconds check/block dynamic tracking in background
+                if (RknBlocklistManager.filteringLevel.value != FilteringLevel.LOW) {
+                    val d = simulationDomains[index % simulationDomains.size]
+                    RknBlocklistManager.incrementBlockedCounter()
+                    addBlockedLog("Блокирован запрос трекера: $d")
+                    index++
+                }
             }
+        }
+    }
+
+    private fun addBlockedLog(log: String) {
+        val currentList = _blockedLogs.value.toMutableList()
+        currentList.add(0, log)
+        if (currentList.size > 8) currentList.removeAt(8)
+        _blockedLogs.value = currentList
+    }
+
+    fun setUrl(url: String) {
+        val cleanUrl = url.trim()
+        if (cleanUrl.isNotEmpty()) {
+            if (RknBlocklistManager.shouldBlock(cleanUrl)) {
+                _currentUrl.value = "rosbrowser://blocked?url=$cleanUrl"
+            } else {
+                _currentUrl.value = cleanUrl
+            }
+        }
+    }
+
+    fun submitSearch(query: String) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isEmpty()) return
+        
+        // If it looks like a domain name, navigate. Otherwise, query Russian sovereign Search Engine
+        if (cleanQuery.contains(".") && !cleanQuery.contains(" ")) {
+            val targetUrl = if (cleanQuery.startsWith("http://") || cleanQuery.startsWith("https://")) {
+                cleanQuery
+            } else {
+                "https://$cleanQuery"
+            }
+            setUrl(targetUrl)
+        } else {
+            // Yandex search as Russian sovereign default
+            setUrl("https://ya.ru/search/?text=${android.net.Uri.encode(cleanQuery)}")
+        }
+    }
+
+    fun goHome() {
+        _currentUrl.value = "rosbrowser://home"
+        _searchText.value = ""
+    }
+
+    fun selectTab(tab: BrowserTab) {
+        _activeTab.value = tab
+    }
+
+    fun updateTheme(theme: BackgroundTheme) {
+        _backgroundTheme.value = theme
+        val prefs = getApplication<Application>().getSharedPreferences("rosbrowser_user", Application.MODE_PRIVATE)
+        prefs.edit().putString("user_theme", theme.name).apply()
+    }
+
+    fun updateFilteringLevel(level: FilteringLevel) {
+        RknBlocklistManager.setFilteringLevel(level)
+        val prefs = getApplication<Application>().getSharedPreferences("rosbrowser_user", Application.MODE_PRIVATE)
+        prefs.edit().putString("filtering_level", level.name).apply()
+    }
+
+    // Password Manager functions
+    fun unlockPasswordManager(unlocked: Boolean) {
+        _isPasswordManagerUnlocked.value = unlocked
+    }
+
+    fun saveCredential(service: String, user: String, pass: String) {
+        viewModelScope.launch {
+            passwordRepository.addCredential(
+                SavedCredential(
+                    serviceName = service,
+                    username = user,
+                    password = pass
+                )
+            )
+        }
+    }
+
+    fun deleteCredential(id: String) {
+        viewModelScope.launch {
+            passwordRepository.deleteCredential(id)
+        }
+    }
+
+    // Auth actions
+    fun registerUser(name: String, email: String, onComplete: () -> Unit) {
+        val prefs = getApplication<Application>().getSharedPreferences("rosbrowser_user", Application.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean("user_registered", true)
+            .putBoolean("user_logged_in", true)
+            .putString("user_name", name)
+            .putString("user_email", email)
+            .apply()
+
+        _isRegistered.value = true
+        _isLoggedIn.value = true
+        _userName.value = name
+        _userEmail.value = email
+        onComplete()
+    }
+
+    fun logoutUser() {
+        val prefs = getApplication<Application>().getSharedPreferences("rosbrowser_user", Application.MODE_PRIVATE)
+        prefs.edit()
+            .putBoolean("user_logged_in", false)
+            .apply()
+        _isLoggedIn.value = false
+        _isPasswordManagerUnlocked.value = false
+    }
+
+    fun loginUser(email: String, onComplete: () -> Unit) {
+        if (_isRegistered.value && email.trim().lowercase() == _userEmail.value.lowercase()) {
+            val prefs = getApplication<Application>().getSharedPreferences("rosbrowser_user", Application.MODE_PRIVATE)
+            prefs.edit().putBoolean("user_logged_in", true).apply()
+            _isLoggedIn.value = true
+            onComplete()
         }
     }
 }
-
-data class DownloadItem(
-    val id: String,
-    val fileName: String,
-    val url: String,
-    val progress: Int,
-    val status: String,
-    val timestamp: Long
-)
-

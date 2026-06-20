@@ -1,66 +1,158 @@
 package com.example.utils
 
-import android.content.Context
-import android.util.LruCache
-import android.util.Log
-import com.example.data.database.BlockedUrl
-import com.example.data.repository.BrowserRepository
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import java.util.Locale
 
 /**
- * Manager responsible for asynchronous preloading and updating of RKN blocklists.
+ * Filter levels of the local sovereign DNS / web firewall.
  */
+enum class FilteringLevel(val displayName: String, val description: String) {
+    LOW("Базовый", "Проверка угроз отключена. Полный свободный доступ к ресурсам без фильтрации."),
+    MEDIUM("Стандартный", "Блокировка фишинга, агрессивной рекламы и шпионских трекеров (метрики, телеметрия)."),
+    HIGH("Суверенный", "Максимальная защита. Фильтрация на основе реестра запрещенных сайтов РКН и вредоносных ресурсов.")
+}
+
+/**
+ * Service block rules
+ */
+data class BlockedService(
+    val name: String,
+    val domain: String,
+    val isSystem: Boolean = false,
+    var isEnabled: Boolean = true
+)
+
 object RknBlocklistManager {
-    private const val TAG = "RknBlocklistManager"
-    
-    @Volatile
-    private var isInitialized = false
-    
-    // Fast memory cache for blocked pattern lookups
-    val blockedCache = LruCache<String, Boolean>(2048)
-    
-    // Detailed info cache
-    val blockedInfoCache = LruCache<String, BlockedUrl>(2048)
+    // Current filtering level
+    private val _filteringLevel = MutableStateFlow(FilteringLevel.HIGH)
+    val filteringLevel: StateFlow<FilteringLevel> = _filteringLevel.asStateFlow()
 
-    fun initialize(context: Context, repository: BrowserRepository) {
-        synchronized(this) {
-            if (isInitialized) {
-                Log.d(TAG, "Already initialized, skipping.")
-                return
-            }
-            isInitialized = true
+    // Real-time counter of blocked domains
+    private val _blockedDomainsCount = MutableStateFlow(42) // Start with an initial nice seed
+    val blockedDomainsCount: StateFlow<Int> = _blockedDomainsCount.asStateFlow()
+
+    // Custom blocked domains added by user
+    private val _customBlockedDomains = MutableStateFlow(
+        setOf("custom-spyware.ru", "ad-tracker-malicious.com")
+    )
+    val customBlockedDomains: StateFlow<Set<String>> = _customBlockedDomains.asStateFlow()
+
+    // Service-level blocking presets
+    private val _blockedServices = MutableStateFlow(
+        listOf(
+            BlockedService("Крипто-майнеры", "coin-miner.org", isSystem = true),
+            BlockedService("Шпионское ПО", "spy-agent.net", isSystem = true),
+            BlockedService("Рекламные сети", "doubleclick.net", isSystem = true),
+            BlockedService("Facebook", "facebook.com", isSystem = false),
+            BlockedService("Instagram", "instagram.com", isSystem = false),
+            BlockedService("X (Twitter)", "twitter.com", isSystem = false),
+            BlockedService("LinkedIn", "linkedin.com", isSystem = false)
+        )
+    )
+    val blockedServices: StateFlow<List<BlockedService>> = _blockedServices.asStateFlow()
+
+    // Hardcoded demo list representing some typical registry bans
+    private val roskomnadzorRegistry = setOf(
+        "fb.com", "facebook.com", "instagram.com", "twitter.com", "x.com", "linkedin.com", 
+        "t.co", "flibusta.is", "rutracker.org", "banned-site.ru", "phishing-bank.ru"
+    )
+
+    private val adAndTrackerRegistry = setOf(
+        "doubleclick.net", "google-analytics.com", "yandex.ru/clck", "telemetry.net", "ads.com"
+    )
+
+    fun setFilteringLevel(level: FilteringLevel) {
+        _filteringLevel.value = level
+    }
+
+    /**
+     * Checks if a navigation URL should be blocked based on the current configuration.
+     * Increments the blocked domain counter if yes.
+     */
+    fun shouldBlock(url: String): Boolean {
+        val level = _filteringLevel.value
+        if (level == FilteringLevel.LOW) {
+            return false // No firewall active
         }
-        val appCtx = context.applicationContext
-        // 1. Asynchronous blocklist preloading
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                Log.d(TAG, "Starting asynchronous blocklist preloading...")
-                repository.allBlockedUrls.collect { list ->
-                    blockedCache.evictAll()
-                    blockedInfoCache.evictAll()
-                    for (item in list) {
-                        val pattern = item.pattern.lowercase().trim()
-                        blockedCache.put(pattern, true)
-                        blockedInfoCache.put(pattern, item)
-                    }
-                    Log.d(TAG, "Asynchronously preloaded ${list.size} RKN patterns to memory.")
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error preloading RKN blocklist", e)
+
+        val host = extractHost(url)
+
+        // 1. Check custom blocked domains
+        if (_customBlockedDomains.value.any { host.contains(it, ignoreCase = true) }) {
+            incrementBlockedCounter()
+            return true
+        }
+
+        // 2. Check disabled service presets
+        _blockedServices.value.forEach { service ->
+            if (service.isEnabled && host.contains(service.domain, ignoreCase = true)) {
+                incrementBlockedCounter()
+                return true
             }
         }
 
-        // 2. Delayed background scheduling for WorkManager updates to avoid contention with database creation/prepopulation
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                kotlinx.coroutines.delay(3000)
-                Log.d(TAG, "Scheduling blocklist update task after initial startup delay...")
-                BlocklistUpdateWorker.schedule(appCtx)
-            } catch (t: Throwable) {
-                Log.e(TAG, "Failed to schedule blocklist updates safely", t)
+        // 3. Medium filtering: Ads & standard tracker threats
+        if (level == FilteringLevel.MEDIUM) {
+            if (adAndTrackerRegistry.any { host.contains(it, ignoreCase = true) }) {
+                incrementBlockedCounter()
+                return true
             }
+        }
+
+        // 4. Sovereign level: All of above + standard RKN blocklist registry
+        if (level == FilteringLevel.HIGH) {
+            if (adAndTrackerRegistry.any { host.contains(it, ignoreCase = true) } ||
+                roskomnadzorRegistry.any { host.contains(it, ignoreCase = true) }) {
+                incrementBlockedCounter()
+                return true
+            }
+        }
+
+        return false
+    }
+
+    fun addCustomBlockedDomain(domain: String) {
+        val cleanDomain = domain.trim().lowercase(Locale.ROOT)
+        if (cleanDomain.isNotEmpty()) {
+            _customBlockedDomains.value = _customBlockedDomains.value + cleanDomain
+        }
+    }
+
+    fun removeCustomBlockedDomain(domain: String) {
+        _customBlockedDomains.value = _customBlockedDomains.value - domain
+    }
+
+    fun toggleServiceBlock(name: String, enabled: Boolean) {
+        _blockedServices.value = _blockedServices.value.map {
+            if (it.name == name) it.copy(isEnabled = enabled) else it
+        }
+    }
+
+    fun addCustomService(name: String, domain: String) {
+        val cleanName = name.trim()
+        val cleanDomain = domain.trim().lowercase(Locale.ROOT)
+        if (cleanName.isNotEmpty() && cleanDomain.isNotEmpty()) {
+            _blockedServices.value = _blockedServices.value + BlockedService(
+                name = cleanName,
+                domain = cleanDomain,
+                isSystem = false,
+                isEnabled = true
+            )
+        }
+    }
+
+    fun incrementBlockedCounter() {
+        _blockedDomainsCount.value = _blockedDomainsCount.value + 1
+    }
+
+    private fun extractHost(url: String): String {
+        return try {
+            val uri = android.net.Uri.parse(url)
+            uri.host ?: url
+        } catch (e: Exception) {
+            url
         }
     }
 }
